@@ -2,6 +2,7 @@ package gorpc
 
 import (
 	"bufio"
+	"compress/flate"
 	"encoding/gob"
 	"io"
 	"net"
@@ -49,6 +50,9 @@ func clientHandler(c *Client) {
 			time.Sleep(time.Second)
 			continue
 		}
+		if err = setupKeepalive(conn); err != nil {
+			logError("rpc.Client: [%s]. Cannot setup keepalive: [%s]", c.Addr, err)
+		}
 		clientHandleConnection(c, conn)
 	}
 }
@@ -92,7 +96,9 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 
 	var msgID uint64
 	bw := bufio.NewWriter(w)
-	e := gob.NewEncoder(bw)
+	zw, _ := flate.NewWriter(bw, flate.DefaultCompression)
+	defer zw.Close()
+	e := gob.NewEncoder(zw)
 	for {
 		var rpcM *clientMessage
 
@@ -102,6 +108,10 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			return
 		case rpcM = <-c.requestsChan:
 		default:
+			if err := zw.Flush(); err != nil {
+				logError("rpc.Client: [%s]. Cannot flush compressed data to wire: [%s]", c.Addr, err)
+				return
+			}
 			if err := bw.Flush(); err != nil {
 				logError("rpc.Client: [%s]. Cannot flush requests to wire: [%s]", c.Addr, err)
 				return
@@ -137,7 +147,9 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 	defer func() { done <- struct{}{} }()
 
 	br := bufio.NewReader(r)
-	d := gob.NewDecoder(br)
+	zr := flate.NewReader(br)
+	defer zr.Close()
+	d := gob.NewDecoder(zr)
 	for {
 		var m wireMessage
 		if err := d.Decode(&m); err != nil {

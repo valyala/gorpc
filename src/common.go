@@ -3,6 +3,8 @@ package gorpc
 import (
 	"encoding/gob"
 	"log"
+	"net"
+	"time"
 )
 
 type LoggerFunc func(format string, args ...interface{})
@@ -24,4 +26,15 @@ type wireMessage struct {
 
 func logError(format string, args ...interface{}) {
 	errorLogger(format, args...)
+}
+
+func setupKeepalive(conn net.Conn) error {
+	tcpConn := conn.(*net.TCPConn)
+	if err := tcpConn.SetKeepAlive(true); err != nil {
+		return err
+	}
+	if err := tcpConn.SetKeepAlivePeriod(10 * time.Second); err != nil {
+		return err
+	}
+	return nil
 }

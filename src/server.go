@@ -2,6 +2,7 @@ package gorpc
 
 import (
 	"bufio"
+	"compress/flate"
 	"encoding/gob"
 	"fmt"
 	"io"
@@ -10,7 +11,7 @@ import (
 	"time"
 )
 
-type HandlerFunc func(request interface{}) (response interface{})
+type HandlerFunc func(remoteAddr string, request interface{}) (response interface{})
 
 type Server struct {
 	Addr    string
@@ -34,6 +35,9 @@ func serverHandler(s *Server) error {
 			time.Sleep(time.Second)
 			continue
 		}
+		if err = setupKeepalive(conn); err != nil {
+			logError("rpc.Server: [%s]. Cannot setup keepalive: [%s]", s.Addr, err)
+		}
 		go serverHandleConnection(s, conn)
 	}
 }
@@ -43,7 +47,8 @@ func serverHandleConnection(s *Server, conn net.Conn) {
 	stopChan := make(chan struct{})
 
 	readerDone := make(chan struct{}, 1)
-	go serverReader(s, conn, responsesChan, stopChan, readerDone)
+	remoteAddr := conn.RemoteAddr().String()
+	go serverReader(s, conn, remoteAddr, responsesChan, stopChan, readerDone)
 
 	writerDone := make(chan struct{}, 1)
 	go serverWriter(s, conn, responsesChan, stopChan, writerDone)
@@ -61,16 +66,19 @@ func serverHandleConnection(s *Server, conn net.Conn) {
 }
 
 type serverMessage struct {
-	ID       uint64
-	Request  interface{}
-	Response interface{}
+	ID         uint64
+	Request    interface{}
+	Response   interface{}
+	RemoteAddr string
 }
 
-func serverReader(s *Server, r io.Reader, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, done chan<- struct{}) {
+func serverReader(s *Server, r io.Reader, remoteAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, done chan<- struct{}) {
 	defer func() { done <- struct{}{} }()
 
 	br := bufio.NewReader(r)
-	d := gob.NewDecoder(br)
+	zr := flate.NewReader(br)
+	defer zr.Close()
+	d := gob.NewDecoder(zr)
 	for {
 		var m wireMessage
 		if err := d.Decode(&m); err != nil {
@@ -78,8 +86,9 @@ func serverReader(s *Server, r io.Reader, responsesChan chan<- *serverMessage, s
 			return
 		}
 		rpcM := &serverMessage{
-			ID:      m.ID,
-			Request: m.Data,
+			ID:         m.ID,
+			Request:    m.Data,
+			RemoteAddr: remoteAddr,
 		}
 		go serveRequest(s, responsesChan, stopChan, rpcM)
 	}
@@ -101,14 +110,16 @@ func serveRequest(s *Server, responsesChan chan<- *serverMessage, stopChan <-cha
 		}
 	}()
 
-	m.Response = s.Handler(m.Request)
+	m.Response = s.Handler(m.RemoteAddr, m.Request)
 }
 
 func serverWriter(s *Server, w io.Writer, responsesChan <-chan *serverMessage, stopChan <-chan struct{}, done chan<- struct{}) {
 	defer func() { done <- struct{}{} }()
 
 	bw := bufio.NewWriter(w)
-	e := gob.NewEncoder(bw)
+	zw, _ := flate.NewWriter(bw, flate.DefaultCompression)
+	defer zw.Close()
+	e := gob.NewEncoder(zw)
 	for {
 		var rpcM *serverMessage
 
@@ -117,6 +128,10 @@ func serverWriter(s *Server, w io.Writer, responsesChan <-chan *serverMessage, s
 			return
 		case rpcM = <-responsesChan:
 		default:
+			if err := zw.Flush(); err != nil {
+				logError("rpc.Server: [%s]. Cannot flush compressed data to wire: [%s]", s.Addr, err)
+				return
+			}
 			if err := bw.Flush(); err != nil {
 				logError("rpc.Server: [%s]. Cannot flush responses to wire: [%s]", s.Addr, err)
 				return
