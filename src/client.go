@@ -36,7 +36,7 @@ func (c *Client) Send(request interface{}) interface{} {
 		<-m.Done
 		return m.Response
 	default:
-		logError("rpc.Client: [%s]. Requests' queue with size=%d is overflown", cap(c.requestsChan), c.Addr)
+		logError("rpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
 		return nil
 	}
 }
