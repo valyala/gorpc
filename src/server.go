@@ -116,11 +116,12 @@ func serverWriter(s *Server, w io.Writer, responsesChan <-chan *serverMessage, s
 		case <-stopChan:
 			return
 		case rpcM = <-responsesChan:
-		case <-time.After(10 * time.Millisecond):
+		default:
 			if err := bw.Flush(); err != nil {
 				logError("rpc.Server: [%s]. Cannot flush responses to wire: [%s]", s.Addr, err)
 				return
 			}
+			time.Sleep(5 * time.Millisecond)
 			select {
 			case <-stopChan:
 				return

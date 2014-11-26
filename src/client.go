@@ -101,12 +101,12 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 		case <-stopChan:
 			return
 		case rpcM = <-c.requestsChan:
-		case <-time.After(10 * time.Millisecond):
+		default:
 			if err := bw.Flush(); err != nil {
 				logError("rpc.Client: [%s]. Cannot flush requests to wire: [%s]", c.Addr, err)
-				rpcM.Done <- struct{}{}
 				return
 			}
+			time.Sleep(5 * time.Millisecond)
 			select {
 			case <-stopChan:
 				return
