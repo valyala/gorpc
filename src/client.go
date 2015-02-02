@@ -188,7 +188,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 	ww := io.Writer(bw)
 	var zw *flate.Writer
 	if c.EnableCompression {
-		zw, _ = flate.NewWriter(bw, flate.DefaultCompression)
+		zw, _ = flate.NewWriter(bw, flate.BestSpeed)
 		defer zw.Close()
 		ww = zw
 	}

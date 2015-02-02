@@ -215,7 +215,7 @@ func serverWriter(s *Server, w io.Writer, responsesChan <-chan *serverMessage, s
 	ww := io.Writer(bw)
 	var zw *flate.Writer
 	if enabledCompression {
-		zw, _ = flate.NewWriter(bw, flate.DefaultCompression)
+		zw, _ = flate.NewWriter(bw, flate.BestSpeed)
 		defer zw.Close()
 		ww = zw
 	}
