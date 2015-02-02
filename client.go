@@ -185,12 +185,12 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 	var msgID uint64
 	bw := bufio.NewWriter(w)
 
-	ww := io.Writer(bw)
+	ww := bw
 	var zw *flate.Writer
 	if c.EnableCompression {
 		zw, _ = flate.NewWriter(bw, flate.BestSpeed)
 		defer zw.Close()
-		ww = zw
+		ww = bufio.NewWriter(zw)
 	}
 	e := gob.NewEncoder(ww)
 
@@ -208,6 +208,10 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			}
 		case <-flushChan:
 			if c.EnableCompression {
+				if err := ww.Flush(); err != nil {
+					logError("rpc.Client: [%s]. Cannot flush data to compressed stream: [%s]", c.Addr, err)
+					return
+				}
 				if err := zw.Flush(); err != nil {
 					logError("rpc.Client: [%s]. Cannot flush compressed data to wire: [%s]", c.Addr, err)
 					return
@@ -246,11 +250,11 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 
 	br := bufio.NewReader(r)
 
-	rr := io.Reader(br)
+	rr := br
 	if c.EnableCompression {
 		zr := flate.NewReader(br)
 		defer zr.Close()
-		rr = zr
+		rr = bufio.NewReader(zr)
 	}
 	d := gob.NewDecoder(rr)
 

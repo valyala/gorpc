@@ -165,11 +165,12 @@ func serverReader(s *Server, r io.Reader, remoteAddr string, responsesChan chan<
 	defer func() { done <- struct{}{} }()
 
 	br := bufio.NewReader(r)
-	rr := io.Reader(br)
+
+	rr := br
 	if enabledCompression {
 		zr := flate.NewReader(br)
 		defer zr.Close()
-		rr = zr
+		rr = bufio.NewReader(zr)
 	}
 	d := gob.NewDecoder(rr)
 
@@ -212,12 +213,12 @@ func serverWriter(s *Server, w io.Writer, responsesChan <-chan *serverMessage, s
 
 	bw := bufio.NewWriter(w)
 
-	ww := io.Writer(bw)
+	ww := bw
 	var zw *flate.Writer
 	if enabledCompression {
 		zw, _ = flate.NewWriter(bw, flate.BestSpeed)
 		defer zw.Close()
-		ww = zw
+		ww = bufio.NewWriter(zw)
 	}
 	e := gob.NewEncoder(ww)
 
@@ -235,6 +236,10 @@ func serverWriter(s *Server, w io.Writer, responsesChan <-chan *serverMessage, s
 			}
 		case <-flushChan:
 			if enabledCompression {
+				if err := ww.Flush(); err != nil {
+					logError("rpc.Server: [%s]. Cannot flush data to compressed stream: [%s]", s.Addr, err)
+					return
+				}
 				if err := zw.Flush(); err != nil {
 					logError("rpc.Server: [%s]. Cannot flush compressed data to wire: [%s]", s.Addr, err)
 					return

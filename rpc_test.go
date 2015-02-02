@@ -277,14 +277,15 @@ func TestCompress(t *testing.T) {
 	defer c2.Stop()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 200; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 50; j++ {
-				resp := c1.Send(j)
-				if resp.(int) != j {
-					t.Fatalf("Unexpected value: %d. Expected %d", resp, j)
+				s := fmt.Sprintf("foo bar baz %d aaabbb", j)
+				resp := c1.Send(s)
+				if resp.(string) != s {
+					t.Fatalf("Unexpected value: %s. Expected %s", resp, s)
 				}
 				resp = c2.Send(i + j)
 				if resp.(int) != i+j {
