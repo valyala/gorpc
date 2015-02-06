@@ -80,6 +80,14 @@ func (c *Client) Stop() {
 // Sends the given request to the server and obtains response from the server.
 // Requests must be sent only via clients started via Client.Start().
 func (c *Client) Send(request interface{}) interface{} {
+	return c.SendWithTimeout(request, c.MaxRequestTime)
+}
+
+// Sends the given request to the server and obtains response from the server.
+// Waits for the response during the given timeout. Returns nil if the response
+// cannot be obtained during the given timeout.
+// Requests must be sent only via clients started via Client.Start().
+func (c *Client) SendWithTimeout(request interface{}, timeout time.Duration) interface{} {
 	m := clientMessage{
 		Request: request,
 		Done:    make(chan struct{}, 1),
@@ -89,7 +97,7 @@ func (c *Client) Send(request interface{}) interface{} {
 		select {
 		case <-m.Done:
 			return m.Response
-		case <-time.After(c.MaxRequestTime):
+		case <-time.After(timeout):
 			logError("rpc.Client: [%s]. Cannot obtain request during MaxRequestTime=%s", c.Addr, c.MaxRequestTime)
 			return nil
 		}

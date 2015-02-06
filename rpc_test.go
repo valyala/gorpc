@@ -80,6 +80,31 @@ func TestMaxRequestTime(t *testing.T) {
 	}
 }
 
+func TestSendWithTimeout(t *testing.T) {
+	s := &Server{
+		Addr: ":15358",
+		Handler: func(remoteAddr string, request interface{}) interface{} {
+			time.Sleep(10 * time.Second)
+			return request
+		},
+	}
+	s.Start()
+	defer s.Stop()
+
+	c := &Client{
+		Addr: ":15358",
+	}
+	c.Start()
+	defer c.Stop()
+
+	for i := 0; i < 10; i++ {
+		resp := c.SendWithTimeout(123, time.Millisecond)
+		if resp != nil {
+			t.Fatalf("Unexpected response %+v: expected nil", resp)
+		}
+	}
+}
+
 func TestIntHandler(t *testing.T) {
 	s := &Server{
 		Addr:    ":15347",
