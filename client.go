@@ -98,7 +98,7 @@ func (c *Client) SendWithTimeout(request interface{}, timeout time.Duration) int
 		case <-m.Done:
 			return m.Response
 		case <-time.After(timeout):
-			logError("rpc.Client: [%s]. Cannot obtain request during MaxRequestTime=%s", c.Addr, c.MaxRequestTime)
+			logError("rpc.Client: [%s]. Cannot obtain request during timeout=%s", c.Addr, timeout)
 			return nil
 		}
 	default:
