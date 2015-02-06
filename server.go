@@ -123,7 +123,7 @@ func serverHandleConnection(s *Server, conn net.Conn) {
 	case <-s.serverStopChan:
 		return
 	case <-time.After(10 * time.Second):
-		logError("rpc.Server: [%s]. Cannot obtain handshake from client %s during 10s", s.Addr, conn)
+		logError("rpc.Server: [%s]. Cannot obtain handshake from client during 10s", s.Addr)
 		return
 	}
 
