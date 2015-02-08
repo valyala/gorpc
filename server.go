@@ -27,12 +27,24 @@ type Server struct {
 	// Default value is 5ms.
 	FlushDelay time.Duration
 
+	// Size of send buffer per each TCP connection.
+	// Default value is 4096.
+	SendBufferSize int
+
+	// Size of recv buffer per each TCP connection.
+	// Default value is 4096.
+	RecvBufferSize int
+
 	serverStopChan chan struct{}
 	stopWg         sync.WaitGroup
 }
 
 // Starts rpc server.
 func (s *Server) Start() error {
+	if s.Handler == nil {
+		panic("rpc.Server: Server.Handler cannot be nil")
+	}
+
 	if s.serverStopChan != nil {
 		panic("rpc.Server: server is already running. Stop it before starting it again")
 	}
@@ -40,6 +52,12 @@ func (s *Server) Start() error {
 
 	if s.FlushDelay <= 0 {
 		s.FlushDelay = 5 * time.Millisecond
+	}
+	if s.SendBufferSize <= 0 {
+		s.SendBufferSize = 4096
+	}
+	if s.RecvBufferSize <= 0 {
+		s.RecvBufferSize = 4096
 	}
 
 	ln, err := net.Listen("tcp", s.Addr)
@@ -164,13 +182,13 @@ type serverMessage struct {
 func serverReader(s *Server, r io.Reader, remoteAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
 	defer func() { done <- struct{}{} }()
 
-	br := bufio.NewReader(r)
+	br := bufio.NewReaderSize(r, s.RecvBufferSize)
 
 	rr := br
 	if enabledCompression {
 		zr := flate.NewReader(br)
 		defer zr.Close()
-		rr = bufio.NewReader(zr)
+		rr = bufio.NewReaderSize(zr, s.RecvBufferSize)
 	}
 	d := gob.NewDecoder(rr)
 
@@ -211,14 +229,14 @@ func serveRequest(s *Server, responsesChan chan<- *serverMessage, stopChan <-cha
 func serverWriter(s *Server, w io.Writer, responsesChan <-chan *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
 	defer func() { done <- struct{}{} }()
 
-	bw := bufio.NewWriter(w)
+	bw := bufio.NewWriterSize(w, s.SendBufferSize)
 
 	ww := bw
 	var zw *flate.Writer
 	if enabledCompression {
 		zw, _ = flate.NewWriter(bw, flate.BestSpeed)
 		defer zw.Close()
-		ww = bufio.NewWriter(zw)
+		ww = bufio.NewWriterSize(zw, s.SendBufferSize)
 	}
 	e := gob.NewEncoder(ww)
 

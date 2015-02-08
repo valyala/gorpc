@@ -35,6 +35,14 @@ type Client struct {
 	// Enable data compression.
 	EnableCompression bool
 
+	// Size of send buffer per each TCP connection.
+	// Default value is 4096.
+	SendBufferSize int
+
+	// Size of recv buffer per each TCP connection.
+	// Default value is 4096.
+	RecvBufferSize int
+
 	requestsChan chan *clientMessage
 
 	clientStopChan chan struct{}
@@ -53,6 +61,12 @@ func (c *Client) Start() {
 
 	if c.MaxRequestTime <= 0 {
 		c.MaxRequestTime = 30 * time.Second
+	}
+	if c.SendBufferSize <= 0 {
+		c.SendBufferSize = 4096
+	}
+	if c.RecvBufferSize <= 0 {
+		c.RecvBufferSize = 4096
 	}
 
 	if c.PendingRequestsCount <= 0 {
@@ -191,14 +205,14 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 	defer func() { done <- struct{}{} }()
 
 	var msgID uint64
-	bw := bufio.NewWriter(w)
+	bw := bufio.NewWriterSize(w, c.SendBufferSize)
 
 	ww := bw
 	var zw *flate.Writer
 	if c.EnableCompression {
 		zw, _ = flate.NewWriter(bw, flate.BestSpeed)
 		defer zw.Close()
-		ww = bufio.NewWriter(zw)
+		ww = bufio.NewWriterSize(zw, c.SendBufferSize)
 	}
 	e := gob.NewEncoder(ww)
 
@@ -256,13 +270,13 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMessage, pendingRequestsLock *sync.Mutex, done chan<- struct{}) {
 	defer func() { done <- struct{}{} }()
 
-	br := bufio.NewReader(r)
+	br := bufio.NewReaderSize(r, c.RecvBufferSize)
 
 	rr := br
 	if c.EnableCompression {
 		zr := flate.NewReader(br)
 		defer zr.Close()
-		rr = bufio.NewReader(zr)
+		rr = bufio.NewReaderSize(zr, c.RecvBufferSize)
 	}
 	d := gob.NewDecoder(rr)
 

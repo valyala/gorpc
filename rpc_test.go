@@ -11,9 +11,14 @@ func init() {
 	SetErrorLogger(func(format string, args ...interface{}) {})
 }
 
+func echoHandler(remoteAddr string, request interface{}) interface{} {
+	return request
+}
+
 func TestServerServe(t *testing.T) {
 	s := &Server{
-		Addr: ":15344",
+		Addr:    ":15344",
+		Handler: echoHandler,
 	}
 	go func() {
 		time.Sleep(time.Millisecond * 100)
@@ -26,7 +31,8 @@ func TestServerServe(t *testing.T) {
 
 func TestServerStartStop(t *testing.T) {
 	s := &Server{
-		Addr: ":15345",
+		Addr:    ":15345",
+		Handler: echoHandler,
 	}
 	for i := 0; i < 5; i++ {
 		if err := s.Start(); err != nil {
@@ -38,7 +44,8 @@ func TestServerStartStop(t *testing.T) {
 
 func TestClientStartStop(t *testing.T) {
 	s := &Server{
-		Addr: ":15346",
+		Addr:    ":15346",
+		Handler: echoHandler,
 	}
 	s.Start()
 	defer s.Stop()
