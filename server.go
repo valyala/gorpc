@@ -120,6 +120,17 @@ func serverHandler(s *Server, ln net.Listener) {
 	}
 }
 
+func setupKeepalive(conn net.Conn) error {
+	tcpConn := conn.(*net.TCPConn)
+	if err := tcpConn.SetKeepAlive(true); err != nil {
+		return err
+	}
+	if err := tcpConn.SetKeepAlivePeriod(30 * time.Second); err != nil {
+		return err
+	}
+	return nil
+}
+
 func serverHandleConnection(s *Server, conn net.Conn) {
 	defer s.stopWg.Done()
 

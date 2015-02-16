@@ -121,6 +121,11 @@ func (c *Client) SendWithTimeout(request interface{}, timeout time.Duration) int
 	}
 }
 
+var dialer = &net.Dialer{
+	Timeout:   10 * time.Second,
+	KeepAlive: 30 * time.Second,
+}
+
 func clientHandler(c *Client) {
 	defer c.stopWg.Done()
 
@@ -130,7 +135,7 @@ func clientHandler(c *Client) {
 	for {
 		dialChan := make(chan struct{}, 1)
 		go func() {
-			if conn, err = net.Dial("tcp", c.Addr); err != nil {
+			if conn, err = dialer.Dial("tcp", c.Addr); err != nil {
 				logError("rpc.Client: [%s]. Cannot establish rpc connection: [%s]", c.Addr, err)
 				time.Sleep(time.Second)
 			}
@@ -145,9 +150,6 @@ func clientHandler(c *Client) {
 
 		if err != nil {
 			continue
-		}
-		if err = setupKeepalive(conn); err != nil {
-			logError("rpc.Client: [%s]. Cannot setup keepalive: [%s]", c.Addr, err)
 		}
 		clientHandleConnection(c, conn)
 	}
