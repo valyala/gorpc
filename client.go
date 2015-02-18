@@ -162,6 +162,7 @@ func clientHandleConnection(c *Client, conn net.Conn) {
 	}
 	if _, err := conn.Write(buf[:]); err != nil {
 		logError("rpc.Client: [%s]. Error when writing handshake to server: [%s]", c.Addr, err)
+		conn.Close()
 		return
 	}
 

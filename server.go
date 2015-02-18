@@ -147,12 +147,15 @@ func serverHandleConnection(s *Server, conn net.Conn) {
 	select {
 	case enabledCompression = <-zChan:
 		if err != nil {
+			conn.Close()
 			return
 		}
 	case <-s.serverStopChan:
+		conn.Close()
 		return
 	case <-time.After(10 * time.Second):
 		logError("rpc.Server: [%s]. Cannot obtain handshake from client during 10s", s.Addr)
+		conn.Close()
 		return
 	}
 
