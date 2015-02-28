@@ -14,10 +14,12 @@ import (
 
 // Server handler function.
 //
-// remoteAddr contains client address returned by net.TCPConn.RemoteAddr()
+// remoteAddr contains client address returned by net.TCPConn.RemoteAddr().
 // Request and response types may be arbitrary.
 // All the request types the client may send to the server must be registered
-// before Server.Start() with gorpc.RegisterType().
+// with gorpc.RegisterType() before starting the server.
+// There is no need in registering base Go types such as int, string, bool,
+// float64, etc. or arrays, slices and maps containing base Go types.
 type HandlerFunc func(remoteAddr string, request interface{}) (response interface{})
 
 // Rpc server.
@@ -51,7 +53,9 @@ type Server struct {
 // Starts rpc server.
 //
 // All the request types the client may send to the server must be registered
-// before Server.Start() with gorpc.RegisterType().
+// with gorpc.RegisterType() before starting the server.
+// There is no need in registering base Go types such as int, string, bool,
+// float64, etc. or arrays, slices and maps containing base Go types.
 func (s *Server) Start() error {
 	if s.Handler == nil {
 		panic("rpc.Server: Server.Handler cannot be nil")
