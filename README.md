@@ -23,7 +23,7 @@ high load.
 
 Currently gorpc with default settings is successfully used in highly loaded
 production environment serving up to 40K qps. Switching from http-based rpc
-to gorpc reduced required network bandwidth from 100 Mbit/s to 8 Mbit/s.
+to gorpc reduced required network bandwidth from 300 Mbit/s to 24 Mbit/s.
 
 
 Docs
