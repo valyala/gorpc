@@ -195,7 +195,7 @@ func serverHandleConnection(s *Server, conn net.Conn) {
 	go serverReader(s, conn, clientAddr, responsesChan, stopChan, readerDone, enabledCompression)
 
 	writerDone := make(chan struct{}, 1)
-	go serverWriter(s, conn, responsesChan, stopChan, writerDone, enabledCompression)
+	go serverWriter(s, conn, clientAddr, responsesChan, stopChan, writerDone, enabledCompression)
 
 	select {
 	case <-readerDone:
@@ -237,7 +237,7 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 	for {
 		var m wireMessage
 		if err := d.Decode(&m); err != nil {
-			logError("gorpc.Server: [%s]. Cannot decode request: [%s]", s.Addr, err)
+			logError("gorpc.Server: [%s]->[%s]. Cannot decode request: [%s]", clientAddr, s.Addr, err)
 			return
 		}
 		rpcM := &serverMessage{
@@ -257,18 +257,18 @@ func serveRequest(s *Server, responsesChan chan<- *serverMessage, stopChan <-cha
 		}
 
 		if x := recover(); x != nil {
-			logError("gorpc.Server: [%s]. Panic occured: %v", s.Addr, x)
+			logError("gorpc.Server: [%s]->[%s]. Panic occured: %v", m.ClientAddr, s.Addr, x)
 
 			stackTrace := make([]byte, 1<<20)
 			n := runtime.Stack(stackTrace, false)
-			logError("gorpc.Server: [%s]. Stack trace: %s", s.Addr, stackTrace[:n])
+			logError("gorpc.Server: [%s]->[%s]. Stack trace: %s", m.ClientAddr, s.Addr, stackTrace[:n])
 		}
 	}()
 
 	m.Response = s.Handler(m.ClientAddr, m.Request)
 }
 
-func serverWriter(s *Server, w io.Writer, responsesChan <-chan *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
+func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-chan *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
 	defer func() { done <- struct{}{} }()
 
 	bw := bufio.NewWriterSize(w, s.SendBufferSize)
@@ -297,16 +297,16 @@ func serverWriter(s *Server, w io.Writer, responsesChan <-chan *serverMessage, s
 		case <-flushChan:
 			if enabledCompression {
 				if err := ww.Flush(); err != nil {
-					logError("gorpc.Server: [%s]. Cannot flush data to compressed stream: [%s]", s.Addr, err)
+					logError("gorpc.Server: [%s]->[%s]. Cannot flush data to compressed stream: [%s]", clientAddr, s.Addr, err)
 					return
 				}
 				if err := zw.Flush(); err != nil {
-					logError("gorpc.Server: [%s]. Cannot flush compressed data to wire: [%s]", s.Addr, err)
+					logError("gorpc.Server: [%s]->[%s]. Cannot flush compressed data to wire: [%s]", clientAddr, s.Addr, err)
 					return
 				}
 			}
 			if err := bw.Flush(); err != nil {
-				logError("gorpc.Server: [%s]. Cannot flush responses to wire: [%s]", s.Addr, err)
+				logError("gorpc.Server: [%s]->[%s]. Cannot flush responses to wire: [%s]", clientAddr, s.Addr, err)
 				return
 			}
 			flushChan = nil
@@ -318,7 +318,7 @@ func serverWriter(s *Server, w io.Writer, responsesChan <-chan *serverMessage, s
 			Data: rpcM.Response,
 		}
 		if err := e.Encode(&m); err != nil {
-			logError("gorpc.Server: [%s]. Cannot send response to wire: [%s]", s.Addr, err)
+			logError("gorpc.Server: [%s]->[%s]. Cannot send response to wire: [%s]", clientAddr, s.Addr, err)
 			return
 		}
 	}
