@@ -12,6 +12,11 @@ import (
 )
 
 // Rpc client.
+//
+// The client must be started with Client.Start() before use.
+//
+// Default client settings are optimized for high load, so don't override
+// them without valid reason.
 type Client struct {
 	// Server TCP address to connect to.
 	Addr string

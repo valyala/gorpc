@@ -23,11 +23,17 @@ import (
 type HandlerFunc func(remoteAddr string, request interface{}) (response interface{})
 
 // Rpc server.
+//
+// Default server settings are optimized for high load, so don't override
+// them without valid reason.
 type Server struct {
 	// TCP address to listen to for incoming connections.
 	Addr string
 
 	// Handler function for incoming messages.
+	//
+	// Server calls this function for each incoming request.
+	// The function must process the request and return the corresponding response.
 	Handler HandlerFunc
 
 	// The maximum number of pending responses in the queue.
