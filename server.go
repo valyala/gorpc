@@ -30,7 +30,7 @@ type Server struct {
 	// TCP address to listen to for incoming connections.
 	Addr string
 
-	// Handler function for incoming messages.
+	// Handler function for incoming requests.
 	//
 	// Server calls this function for each incoming request.
 	// The function must process the request and return the corresponding response.
@@ -234,7 +234,7 @@ func serverReader(s *Server, r io.Reader, remoteAddr string, responsesChan chan<
 	for {
 		var m wireMessage
 		if err := d.Decode(&m); err != nil {
-			logError("gorpc.Server: [%s]. Cannot decode message: [%s]", s.Addr, err)
+			logError("gorpc.Server: [%s]. Cannot decode request: [%s]", s.Addr, err)
 			return
 		}
 		rpcM := &serverMessage{

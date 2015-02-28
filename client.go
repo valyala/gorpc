@@ -321,7 +321,7 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 	for {
 		var m wireMessage
 		if err := d.Decode(&m); err != nil {
-			logError("gorpc.Client: [%s]. Cannot read response from wire: [%s]", c.Addr, err)
+			logError("gorpc.Client: [%s]. Cannot decode response: [%s]", c.Addr, err)
 			return
 		}
 
