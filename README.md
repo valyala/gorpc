@@ -22,4 +22,4 @@ packets and network bandwidth) required for rpc processing under high load.
 
 Currently gorpc is successfully used in highly loaded production environment
 serving up to 40K qps. Switching from http-based rpc to gorpc reduced required
-network bandwidth by more than 10 times.
+network bandwidth from 100 Mbit/s to 8 Mbit/s.
