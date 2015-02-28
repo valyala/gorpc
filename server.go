@@ -23,16 +23,20 @@ type Server struct {
 	// Handler function for incoming messages.
 	Handler HandlerFunc
 
+	// The maximum number of pending responses in the queue.
+	// Default is 1024.
+	PendingResponsesCount int
+
 	// The maximum delay between response flushes to clients.
-	// Default value is 5ms.
+	// Default is 5ms.
 	FlushDelay time.Duration
 
 	// Size of send buffer per each TCP connection.
-	// Default value is 4096.
+	// Default is 4096.
 	SendBufferSize int
 
 	// Size of recv buffer per each TCP connection.
-	// Default value is 4096.
+	// Default is 4096.
 	RecvBufferSize int
 
 	serverStopChan chan struct{}
@@ -50,6 +54,9 @@ func (s *Server) Start() error {
 	}
 	s.serverStopChan = make(chan struct{})
 
+	if s.PendingResponsesCount <= 0 {
+		s.PendingResponsesCount = 1024
+	}
 	if s.FlushDelay <= 0 {
 		s.FlushDelay = 5 * time.Millisecond
 	}
@@ -159,7 +166,7 @@ func serverHandleConnection(s *Server, conn net.Conn) {
 		return
 	}
 
-	responsesChan := make(chan *serverMessage, 1024)
+	responsesChan := make(chan *serverMessage, s.PendingResponsesCount)
 	stopChan := make(chan struct{})
 
 	readerDone := make(chan struct{}, 1)
