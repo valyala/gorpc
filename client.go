@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"compress/flate"
 	"encoding/gob"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -36,12 +37,12 @@ type Client struct {
 	// By default data compression is enabled.
 	DisableCompression bool
 
-	// Size of send buffer per each TCP connection.
-	// Default value is 1024*1024.
+	// Size of send buffer per each TCP connection in bytes.
+	// Default value is 1M.
 	SendBufferSize int
 
-	// Size of recv buffer per each TCP connection.
-	// Default value is 1024*1024.
+	// Size of recv buffer per each TCP connection in bytes.
+	// Default value is 1M.
 	RecvBufferSize int
 
 	requestsChan chan *clientMessage
@@ -50,7 +51,7 @@ type Client struct {
 	stopWg         sync.WaitGroup
 }
 
-// Starts rpc client. Establishes connection to Client.Addr.
+// Starts rpc client. Establishes connection to the server on Client.Addr.
 func (c *Client) Start() {
 	if c.clientStopChan != nil {
 		panic("rpc.Client: the given client is already started. Call Client.Stop() before calling Client.Start() again!")
@@ -92,33 +93,47 @@ func (c *Client) Stop() {
 }
 
 // Sends the given request to the server and obtains response from the server.
-// Requests must be sent only via clients started via Client.Start().
-func (c *Client) Send(request interface{}) interface{} {
-	return c.SendWithTimeout(request, c.MaxRequestTime)
+// Returns non-nil error if the response cannot be obtained during
+// Client.MaxRequestTime or server connection problems occur.
+//
+// Request and response types may be arbitrary. All the response types
+// the server may return must be registered via gorpc.RegisterType() before
+// using the client.
+//
+// Don't forget starting the client with Client.Start() before calling Client.Send().
+func (c *Client) Send(request interface{}) (interface{}, error) {
+	return c.SendTimeout(request, c.MaxRequestTime)
 }
 
 // Sends the given request to the server and obtains response from the server.
-// Waits for the response during the given timeout. Returns nil if the response
-// cannot be obtained during the given timeout.
-// Requests must be sent only via clients started via Client.Start().
-func (c *Client) SendWithTimeout(request interface{}, timeout time.Duration) interface{} {
+// Returns non-nil error if the response cannot be obtained during
+// the given timeout or server connection problems occur.
+//
+// Request and response types may be arbitrary. All the response types
+// the server may return must be registered via gorpc.RegisterType() before
+// using the client.
+//
+// Don't forget starting the client with Client.Start() before calling Client.Send().
+func (c *Client) SendTimeout(request interface{}, timeout time.Duration) (interface{}, error) {
 	m := clientMessage{
 		Request: request,
-		Done:    make(chan struct{}, 1),
+		Done:    make(chan struct{}),
 	}
 	tc := time.After(timeout)
 	select {
 	case c.requestsChan <- &m:
 		select {
 		case <-m.Done:
-			return m.Response
+			return m.Response, m.Error
 		case <-tc:
-			logError("rpc.Client: [%s]. Cannot obtain request during timeout=%s", c.Addr, timeout)
-			return nil
+			err := fmt.Errorf("rpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
+			logError("%s", err)
+			return nil, err
 		}
 	case <-tc:
-		logError("rpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
-		return nil
+		err := fmt.Errorf("rpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
+		logError("%s", err)
+		return nil, err
 	}
 }
 
@@ -195,7 +210,8 @@ func clientHandleConnection(c *Client, conn net.Conn) {
 	}
 
 	for _, m := range pendingRequests {
-		m.Done <- struct{}{}
+		m.Error = fmt.Errorf("rpc.Client: [%s]. Server connection error occured or Client.Stop() called", c.Addr)
+		close(m.Done)
 	}
 }
 
@@ -203,6 +219,7 @@ type clientMessage struct {
 	Request  interface{}
 	Response interface{}
 	Done     chan struct{}
+	Error    error
 }
 
 func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMessage, pendingRequestsLock *sync.Mutex, stopChan <-chan struct{}, done chan<- struct{}) {
@@ -261,11 +278,14 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			Data: rpcM.Request,
 		}
 		if err := e.Encode(&m); err != nil {
-			logError("rpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
-			rpcM.Done <- struct{}{}
+			rpcM.Error = fmt.Errorf("rpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
+			logError("%s", rpcM.Error)
+			close(rpcM.Done)
+
 			pendingRequestsLock.Lock()
 			delete(pendingRequests, msgID)
 			pendingRequestsLock.Unlock()
+
 			return
 		}
 	}
@@ -301,6 +321,6 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 		}
 
 		rpcM.Response = m.Data
-		rpcM.Done <- struct{}{}
+		close(rpcM.Done)
 	}
 }

@@ -129,7 +129,10 @@ func Benchmark_EchoStruct_Nocompress_10000_Workers(b *testing.B) {
 
 func benchEchoInt(b *testing.B, workers int, disableCompression bool) {
 	benchFunc(b, workers, disableCompression, func(c *Client, n int) {
-		resp := c.Send(n)
+		resp, err := c.Send(n)
+		if err != nil {
+			b.Fatalf("Unexpected error: [%s]", err)
+		}
 		if resp == nil {
 			b.Fatalf("Unexpected nil response")
 		}
@@ -146,7 +149,10 @@ func benchEchoInt(b *testing.B, workers int, disableCompression bool) {
 func benchEchoString(b *testing.B, workers int, disableCompression bool) {
 	benchFunc(b, workers, disableCompression, func(c *Client, n int) {
 		s := fmt.Sprintf("test string %d", n)
-		resp := c.Send(s)
+		resp, err := c.Send(s)
+		if err != nil {
+			b.Fatalf("Unexpected error: [%s]", err)
+		}
 		if resp == nil {
 			b.Fatalf("Unexpected nil response")
 		}
@@ -155,7 +161,7 @@ func benchEchoString(b *testing.B, workers int, disableCompression bool) {
 			b.Fatalf("Unexpected response type: %T. Expected string", resp)
 		}
 		if x != s {
-			b.Fatalf("Unexpected value returned: %s. Expected %d", x, s)
+			b.Fatalf("Unexpected value returned: %s. Expected %s", x, s)
 		}
 	})
 }
@@ -175,7 +181,10 @@ func benchEchoStruct(b *testing.B, workers int, disableCompression bool) {
 			B: fmt.Sprintf("test string %d", n),
 			C: []byte(fmt.Sprintf("test bytes %d", n)),
 		}
-		resp := c.Send(s)
+		resp, err := c.Send(s)
+		if err != nil {
+			b.Fatalf("Unexpected error: [%s]", err)
+		}
 		if resp == nil {
 			b.Fatalf("Unexpected nil response")
 		}

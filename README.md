@@ -23,3 +23,15 @@ packets and network bandwidth) required for rpc processing under high load.
 Currently gorpc is successfully used in highly loaded production environment
 serving up to 40K qps. Switching from http-based rpc to gorpc reduced required
 network bandwidth from 100 Mbit/s to 8 Mbit/s.
+
+
+Docs
+====
+
+See http://godoc.org/github.com/valyala/gorpc .
+
+
+Usage
+=====
+
+See tests.

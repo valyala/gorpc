@@ -13,6 +13,11 @@ import (
 )
 
 // Server handler function.
+//
+// remoteAddr contains client address returned by net.TCPConn.RemoteAddr()
+// Request and response types may be arbitrary.
+// All the request types the client may send to the server must be registered
+// before Server.Start() with gorpc.RegisterType().
 type HandlerFunc func(remoteAddr string, request interface{}) (response interface{})
 
 // Rpc server.
@@ -31,12 +36,12 @@ type Server struct {
 	// Default is 5ms.
 	FlushDelay time.Duration
 
-	// Size of send buffer per each TCP connection.
-	// Default is 1024*1024.
+	// Size of send buffer per each TCP connection in bytes.
+	// Default is 1M.
 	SendBufferSize int
 
-	// Size of recv buffer per each TCP connection.
-	// Default is 1024*1024.
+	// Size of recv buffer per each TCP connection in bytes.
+	// Default is 1M.
 	RecvBufferSize int
 
 	serverStopChan chan struct{}
@@ -44,6 +49,9 @@ type Server struct {
 }
 
 // Starts rpc server.
+//
+// All the request types the client may send to the server must be registered
+// before Server.Start() with gorpc.RegisterType().
 func (s *Server) Start() error {
 	if s.Handler == nil {
 		panic("rpc.Server: Server.Handler cannot be nil")
@@ -78,7 +86,7 @@ func (s *Server) Start() error {
 	return nil
 }
 
-// Stops rpc server.
+// Stops rpc server. Stopped server can be started again.
 func (s *Server) Stop() {
 	close(s.serverStopChan)
 	s.stopWg.Wait()
