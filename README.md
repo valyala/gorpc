@@ -35,4 +35,38 @@ See http://godoc.org/github.com/valyala/gorpc .
 Usage
 =====
 
-See tests.
+Server:
+```go
+s := &Server{
+	// Accept clients on this TCP address.
+	Addr: ":12345",
+
+	// Echo handler - just return back the message we received from the client
+	Handler: func(clientAddr string, request interface{}) interface{} {
+		log.Printf("Obtained request %+v from the client %s\n", request, clientAddr)
+		return request
+	},
+}
+if err := s.Serve(); err != nil {
+	log.Fatalf("Cannot start rpc server: %s", err)
+}
+```
+
+Client:
+```go
+c := &Client{
+	// TCP address of the server.
+	Addr: "rpc.server.addr:12345",
+}
+c.Start()
+
+resp, err := c.Send("foobar")
+if err != nil {
+	log.Fatalf("Error when sending request to server: %s", err)
+}
+if resp.(string) != "foobar" {
+	log.Fatalf("Unexpected response from the server: %+v", resp)
+}
+```
+
+See tests for more usage examples.
