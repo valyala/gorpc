@@ -18,7 +18,8 @@ features useful for highly loaded rpc applications:
   as possible data from the network.
 
 These features help the OS minimizing overhead (CPU load, the number of network
-packets and network bandwidth) required for rpc processing under high load.
+packets and the amount of network bandwidth) required for rpc processing under
+high load.
 
 Currently gorpc with default settings is successfully used in highly loaded
 production environment serving up to 40K qps. Switching from http-based rpc
