@@ -21,7 +21,7 @@ type Client struct {
 	Conns int
 
 	// The maximum number of pending requests in the queue.
-	// Default is 1024.
+	// Default is 32768.
 	PendingRequestsCount int
 
 	// Delay between request flushes.
@@ -36,11 +36,11 @@ type Client struct {
 	EnableCompression bool
 
 	// Size of send buffer per each TCP connection.
-	// Default value is 4096.
+	// Default value is 1024*1024.
 	SendBufferSize int
 
 	// Size of recv buffer per each TCP connection.
-	// Default value is 4096.
+	// Default value is 1024*1024.
 	RecvBufferSize int
 
 	requestsChan chan *clientMessage
@@ -55,23 +55,22 @@ func (c *Client) Start() {
 		panic("rpc.Client: the given client is already started. Call Client.Stop() before calling Client.Start() again!")
 	}
 
+	if c.PendingRequestsCount <= 0 {
+		c.PendingRequestsCount = 32768
+	}
 	if c.FlushDelay <= 0 {
 		c.FlushDelay = 5 * time.Millisecond
 	}
-
 	if c.MaxRequestTime <= 0 {
 		c.MaxRequestTime = 30 * time.Second
 	}
 	if c.SendBufferSize <= 0 {
-		c.SendBufferSize = 4096
+		c.SendBufferSize = 1024 * 1024
 	}
 	if c.RecvBufferSize <= 0 {
-		c.RecvBufferSize = 4096
+		c.RecvBufferSize = 1024 * 1024
 	}
 
-	if c.PendingRequestsCount <= 0 {
-		c.PendingRequestsCount = 1024
-	}
 	c.requestsChan = make(chan *clientMessage, c.PendingRequestsCount)
 	c.clientStopChan = make(chan struct{})
 
