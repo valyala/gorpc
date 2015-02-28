@@ -5,7 +5,7 @@ Simple, fast and scalable rpc library for go.
 
 Unlike the original library at http://golang.org/pkg/net/rpc/ it multiplexes
 requests over a small number of TCP connections. This provides the following
-features useful for highly loaded client-server applications:
+features useful for highly loaded rpc applications:
 
 * It minimizes the number of connect() syscalls by pipelining request
   and response messages over a single TCP connection.
