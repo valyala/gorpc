@@ -292,18 +292,18 @@ func TestCompress(t *testing.T) {
 	defer s.Stop()
 
 	c1 := &Client{
-		Addr:              ":15352",
-		Conns:             2,
-		FlushDelay:        time.Millisecond,
-		EnableCompression: true,
+		Addr:               ":15352",
+		Conns:              2,
+		FlushDelay:         time.Millisecond,
+		DisableCompression: true,
 	}
 	c1.Start()
 	defer c1.Stop()
 
 	c2 := &Client{
-		Addr:              ":15352",
-		FlushDelay:        2 * time.Millisecond,
-		EnableCompression: false,
+		Addr:               ":15352",
+		FlushDelay:         2 * time.Millisecond,
+		DisableCompression: false,
 	}
 	c2.Start()
 	defer c2.Stop()
