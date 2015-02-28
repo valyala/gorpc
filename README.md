@@ -19,3 +19,7 @@ features useful for highly loaded client-server applications:
 
 These features help the OS minimizing overhead (CPU load, the number of network
 packets and network bandwidth) required for rpc processing under high load.
+
+Currently gorpc is successfully used in highly loaded production environment
+serving up to 40K qps. Switching from http-based rpc to gorpc reduced required
+network bandwidth by more than 10 times.
