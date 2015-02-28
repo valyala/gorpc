@@ -59,7 +59,7 @@ type Client struct {
 // float64, etc. or arrays, slices and maps containing base Go types.
 func (c *Client) Start() {
 	if c.clientStopChan != nil {
-		panic("rpc.Client: the given client is already started. Call Client.Stop() before calling Client.Start() again!")
+		panic("gorpc.Client: the given client is already started. Call Client.Stop() before calling Client.Start() again!")
 	}
 
 	if c.PendingRequestsCount <= 0 {
@@ -135,12 +135,12 @@ func (c *Client) SendTimeout(request interface{}, timeout time.Duration) (interf
 		case <-m.Done:
 			return m.Response, m.Error
 		case <-tc:
-			err := fmt.Errorf("rpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
+			err := fmt.Errorf("gorpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
 			logError("%s", err)
 			return nil, err
 		}
 	case <-tc:
-		err := fmt.Errorf("rpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
+		err := fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
 		logError("%s", err)
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func clientHandler(c *Client) {
 		dialChan := make(chan struct{}, 1)
 		go func() {
 			if conn, err = dialer.Dial("tcp", c.Addr); err != nil {
-				logError("rpc.Client: [%s]. Cannot establish rpc connection: [%s]", c.Addr, err)
+				logError("gorpc.Client: [%s]. Cannot establish rpc connection: [%s]", c.Addr, err)
 				time.Sleep(time.Second)
 			}
 			dialChan <- struct{}{}
@@ -186,7 +186,7 @@ func clientHandleConnection(c *Client, conn net.Conn) {
 		buf[0] = 1
 	}
 	if _, err := conn.Write(buf[:]); err != nil {
-		logError("rpc.Client: [%s]. Error when writing handshake to server: [%s]", c.Addr, err)
+		logError("gorpc.Client: [%s]. Error when writing handshake to server: [%s]", c.Addr, err)
 		conn.Close()
 		return
 	}
@@ -219,7 +219,7 @@ func clientHandleConnection(c *Client, conn net.Conn) {
 	}
 
 	for _, m := range pendingRequests {
-		m.Error = fmt.Errorf("rpc.Client: [%s]. Server connection error occured or Client.Stop() called", c.Addr)
+		m.Error = fmt.Errorf("gorpc.Client: [%s]. Server connection error occured or Client.Stop() called", c.Addr)
 		close(m.Done)
 	}
 }
@@ -261,16 +261,16 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 		case <-flushChan:
 			if c.DisableCompression {
 				if err := ww.Flush(); err != nil {
-					logError("rpc.Client: [%s]. Cannot flush data to compressed stream: [%s]", c.Addr, err)
+					logError("gorpc.Client: [%s]. Cannot flush data to compressed stream: [%s]", c.Addr, err)
 					return
 				}
 				if err := zw.Flush(); err != nil {
-					logError("rpc.Client: [%s]. Cannot flush compressed data to wire: [%s]", c.Addr, err)
+					logError("gorpc.Client: [%s]. Cannot flush compressed data to wire: [%s]", c.Addr, err)
 					return
 				}
 			}
 			if err := bw.Flush(); err != nil {
-				logError("rpc.Client: [%s]. Cannot flush requests to wire: [%s]", c.Addr, err)
+				logError("gorpc.Client: [%s]. Cannot flush requests to wire: [%s]", c.Addr, err)
 				return
 			}
 			flushChan = nil
@@ -287,7 +287,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			Data: rpcM.Request,
 		}
 		if err := e.Encode(&m); err != nil {
-			rpcM.Error = fmt.Errorf("rpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
+			rpcM.Error = fmt.Errorf("gorpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
 			logError("%s", rpcM.Error)
 			close(rpcM.Done)
 
@@ -316,7 +316,7 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 	for {
 		var m wireMessage
 		if err := d.Decode(&m); err != nil {
-			logError("rpc.Client: [%s]. Cannot read response from wire: [%s]", c.Addr, err)
+			logError("gorpc.Client: [%s]. Cannot read response from wire: [%s]", c.Addr, err)
 			return
 		}
 
@@ -325,7 +325,7 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 		delete(pendingRequests, m.ID)
 		pendingRequestsLock.Unlock()
 		if !ok {
-			logError("rpc.Client: [%s]. Unexpected msgID=[%d] obtained from server", c.Addr, m.ID)
+			logError("gorpc.Client: [%s]. Unexpected msgID=[%d] obtained from server", c.Addr, m.ID)
 			return
 		}
 

@@ -58,11 +58,11 @@ type Server struct {
 // float64, etc. or arrays, slices and maps containing base Go types.
 func (s *Server) Start() error {
 	if s.Handler == nil {
-		panic("rpc.Server: Server.Handler cannot be nil")
+		panic("gorpc.Server: Server.Handler cannot be nil")
 	}
 
 	if s.serverStopChan != nil {
-		panic("rpc.Server: server is already running. Stop it before starting it again")
+		panic("gorpc.Server: server is already running. Stop it before starting it again")
 	}
 	s.serverStopChan = make(chan struct{})
 
@@ -81,8 +81,8 @@ func (s *Server) Start() error {
 
 	ln, err := net.Listen("tcp", s.Addr)
 	if err != nil {
-		logError("rpc.Server: [%s]. Cannot listen to: [%s]", s.Addr, err)
-		return fmt.Errorf("rpc.Server: [%s]. Cannot listen to: [%s]", s.Addr, err)
+		logError("gorpc.Server: [%s]. Cannot listen to: [%s]", s.Addr, err)
+		return fmt.Errorf("gorpc.Server: [%s]. Cannot listen to: [%s]", s.Addr, err)
 	}
 
 	s.stopWg.Add(1)
@@ -114,7 +114,7 @@ func serverHandler(s *Server, ln net.Listener) {
 		acceptChan := make(chan struct{}, 1)
 		go func() {
 			if conn, err = ln.Accept(); err != nil {
-				logError("rpc.Server: [%s]. Cannot accept new connection: [%s]", s.Addr, err)
+				logError("gorpc.Server: [%s]. Cannot accept new connection: [%s]", s.Addr, err)
 				time.Sleep(time.Second)
 			}
 			acceptChan <- struct{}{}
@@ -131,7 +131,7 @@ func serverHandler(s *Server, ln net.Listener) {
 			continue
 		}
 		if err = setupKeepalive(conn); err != nil {
-			logError("rpc.Server: [%s]. Cannot setup keepalive: [%s]", s.Addr, err)
+			logError("gorpc.Server: [%s]. Cannot setup keepalive: [%s]", s.Addr, err)
 		}
 
 		s.stopWg.Add(1)
@@ -159,7 +159,7 @@ func serverHandleConnection(s *Server, conn net.Conn) {
 	go func() {
 		var buf [1]byte
 		if _, err = conn.Read(buf[:]); err != nil {
-			logError("rpc.Server: [%s]. Error when reading handshake from client: [%s]", s.Addr, err)
+			logError("gorpc.Server: [%s]. Error when reading handshake from client: [%s]", s.Addr, err)
 		}
 		zChan <- (buf[0] != 0)
 	}()
@@ -173,7 +173,7 @@ func serverHandleConnection(s *Server, conn net.Conn) {
 		conn.Close()
 		return
 	case <-time.After(10 * time.Second):
-		logError("rpc.Server: [%s]. Cannot obtain handshake from client during 10s", s.Addr)
+		logError("gorpc.Server: [%s]. Cannot obtain handshake from client during 10s", s.Addr)
 		conn.Close()
 		return
 	}
@@ -228,7 +228,7 @@ func serverReader(s *Server, r io.Reader, remoteAddr string, responsesChan chan<
 	for {
 		var m wireMessage
 		if err := d.Decode(&m); err != nil {
-			logError("rpc.Server: [%s]. Cannot decode message: [%s]", s.Addr, err)
+			logError("gorpc.Server: [%s]. Cannot decode message: [%s]", s.Addr, err)
 			return
 		}
 		rpcM := &serverMessage{
@@ -248,11 +248,11 @@ func serveRequest(s *Server, responsesChan chan<- *serverMessage, stopChan <-cha
 		}
 
 		if x := recover(); x != nil {
-			logError("rpc.Server: [%s]. Panic occured: %v", s.Addr, x)
+			logError("gorpc.Server: [%s]. Panic occured: %v", s.Addr, x)
 
 			stackTrace := make([]byte, 1<<20)
 			n := runtime.Stack(stackTrace, false)
-			logError("rpc.Server: [%s]. Stack trace: %s", s.Addr, stackTrace[:n])
+			logError("gorpc.Server: [%s]. Stack trace: %s", s.Addr, stackTrace[:n])
 		}
 	}()
 
@@ -288,16 +288,16 @@ func serverWriter(s *Server, w io.Writer, responsesChan <-chan *serverMessage, s
 		case <-flushChan:
 			if enabledCompression {
 				if err := ww.Flush(); err != nil {
-					logError("rpc.Server: [%s]. Cannot flush data to compressed stream: [%s]", s.Addr, err)
+					logError("gorpc.Server: [%s]. Cannot flush data to compressed stream: [%s]", s.Addr, err)
 					return
 				}
 				if err := zw.Flush(); err != nil {
-					logError("rpc.Server: [%s]. Cannot flush compressed data to wire: [%s]", s.Addr, err)
+					logError("gorpc.Server: [%s]. Cannot flush compressed data to wire: [%s]", s.Addr, err)
 					return
 				}
 			}
 			if err := bw.Flush(); err != nil {
-				logError("rpc.Server: [%s]. Cannot flush responses to wire: [%s]", s.Addr, err)
+				logError("gorpc.Server: [%s]. Cannot flush responses to wire: [%s]", s.Addr, err)
 				return
 			}
 			flushChan = nil
@@ -309,7 +309,7 @@ func serverWriter(s *Server, w io.Writer, responsesChan <-chan *serverMessage, s
 			Data: rpcM.Response,
 		}
 		if err := e.Encode(&m); err != nil {
-			logError("rpc.Server: [%s]. Cannot send response to wire: [%s]", s.Addr, err)
+			logError("gorpc.Server: [%s]. Cannot send response to wire: [%s]", s.Addr, err)
 			return
 		}
 	}
