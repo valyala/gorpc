@@ -15,6 +15,9 @@ import (
 //
 // The client must be started with Client.Start() before use.
 //
+// It is absolutely safe and encouraged using a single client across arbitrary
+// number of concurrently running goroutines.
+//
 // Default client settings are optimized for high load, so don't override
 // them without valid reason.
 type Client struct {
