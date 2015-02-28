@@ -116,7 +116,7 @@ func (c *Client) Stop() {
 // float64, etc. or arrays, slices and maps containing base Go types.
 //
 // Don't forget starting the client with Client.Start() before calling Client.Send().
-func (c *Client) Send(request interface{}) (interface{}, error) {
+func (c *Client) Send(request interface{}) (response interface{}, err error) {
 	return c.SendTimeout(request, c.MaxRequestTime)
 }
 
@@ -131,7 +131,7 @@ func (c *Client) Send(request interface{}) (interface{}, error) {
 // float64, etc. or arrays, slices and maps containing base Go types.
 //
 // Don't forget starting the client with Client.Start() before calling Client.Send().
-func (c *Client) SendTimeout(request interface{}, timeout time.Duration) (interface{}, error) {
+func (c *Client) SendTimeout(request interface{}, timeout time.Duration) (response interface{}, err error) {
 	m := clientMessage{
 		Request: request,
 		Done:    make(chan struct{}),
