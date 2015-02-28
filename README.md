@@ -1,7 +1,7 @@
 gorpc
 =====
 
-Simple, fast and scalable rpc library for go.
+Simple, fast and scalable rpc library for high load.
 
 Unlike the original library at http://golang.org/pkg/net/rpc/ it multiplexes
 requests over a small number of TCP connections. This provides the following
