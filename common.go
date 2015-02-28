@@ -5,11 +5,14 @@ import (
 	"log"
 )
 
+// Error logging function to pass to gorpc.SetErrorLogger().
 type LoggerFunc func(format string, args ...interface{})
 
 var errorLogger = LoggerFunc(log.Printf)
 
 // Use the given error logger in gorpc.
+//
+// By default log.Printf is used for error logging.
 func SetErrorLogger(f LoggerFunc) {
 	errorLogger = f
 }
