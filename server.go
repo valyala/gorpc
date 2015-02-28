@@ -14,13 +14,13 @@ import (
 
 // Server handler function.
 //
-// remoteAddr contains client address returned by net.TCPConn.RemoteAddr().
+// clientAddr contains client address returned by net.TCPConn.RemoteAddr().
 // Request and response types may be arbitrary.
 // All the request types the client may send to the server must be registered
 // with gorpc.RegisterType() before starting the server.
 // There is no need in registering base Go types such as int, string, bool,
 // float64, etc. or arrays, slices and maps containing base Go types.
-type HandlerFunc func(remoteAddr string, request interface{}) (response interface{})
+type HandlerFunc func(clientAddr string, request interface{}) (response interface{})
 
 // Rpc server.
 //
@@ -87,8 +87,9 @@ func (s *Server) Start() error {
 
 	ln, err := net.Listen("tcp", s.Addr)
 	if err != nil {
-		logError("gorpc.Server: [%s]. Cannot listen to: [%s]", s.Addr, err)
-		return fmt.Errorf("gorpc.Server: [%s]. Cannot listen to: [%s]", s.Addr, err)
+		err := fmt.Errorf("gorpc.Server: [%s]. Cannot listen to: [%s]", s.Addr, err)
+		logError("%s", err)
+		return err
 	}
 
 	s.stopWg.Add(1)
@@ -105,9 +106,11 @@ func (s *Server) Stop() {
 
 // Starts rpc server and blocks until it is stopped.
 func (s *Server) Serve() error {
-	err := s.Start()
+	if err := s.Start(); err != nil {
+		return err
+	}
 	s.stopWg.Wait()
-	return err
+	return nil
 }
 
 func serverHandler(s *Server, ln net.Listener) {
@@ -188,8 +191,8 @@ func serverHandleConnection(s *Server, conn net.Conn) {
 	stopChan := make(chan struct{})
 
 	readerDone := make(chan struct{}, 1)
-	remoteAddr := conn.RemoteAddr().String()
-	go serverReader(s, conn, remoteAddr, responsesChan, stopChan, readerDone, enabledCompression)
+	clientAddr := conn.RemoteAddr().String()
+	go serverReader(s, conn, clientAddr, responsesChan, stopChan, readerDone, enabledCompression)
 
 	writerDone := make(chan struct{}, 1)
 	go serverWriter(s, conn, responsesChan, stopChan, writerDone, enabledCompression)
@@ -215,10 +218,10 @@ type serverMessage struct {
 	ID         uint64
 	Request    interface{}
 	Response   interface{}
-	RemoteAddr string
+	ClientAddr string
 }
 
-func serverReader(s *Server, r io.Reader, remoteAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
+func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
 	defer func() { done <- struct{}{} }()
 
 	br := bufio.NewReaderSize(r, s.RecvBufferSize)
@@ -240,7 +243,7 @@ func serverReader(s *Server, r io.Reader, remoteAddr string, responsesChan chan<
 		rpcM := &serverMessage{
 			ID:         m.ID,
 			Request:    m.Data,
-			RemoteAddr: remoteAddr,
+			ClientAddr: clientAddr,
 		}
 		go serveRequest(s, responsesChan, stopChan, rpcM)
 	}
@@ -262,7 +265,7 @@ func serveRequest(s *Server, responsesChan chan<- *serverMessage, stopChan <-cha
 		}
 	}()
 
-	m.Response = s.Handler(m.RemoteAddr, m.Request)
+	m.Response = s.Handler(m.ClientAddr, m.Request)
 }
 
 func serverWriter(s *Server, w io.Writer, responsesChan <-chan *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {

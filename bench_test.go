@@ -231,7 +231,7 @@ func benchFunc(b *testing.B, workers int, disableCompression bool, f func(*Clien
 func createEchoServerAndClient(disableCompression bool) (s *Server, c *Client) {
 	s = &Server{
 		Addr:    ":15347",
-		Handler: func(remoteAddr string, request interface{}) interface{} { return request },
+		Handler: func(clientAddr string, request interface{}) interface{} { return request },
 	}
 	s.Start()
 

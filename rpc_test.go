@@ -11,7 +11,7 @@ func init() {
 	SetErrorLogger(func(format string, args ...interface{}) {})
 }
 
-func echoHandler(remoteAddr string, request interface{}) interface{} {
+func echoHandler(clientAddr string, request interface{}) interface{} {
 	return request
 }
 
@@ -64,7 +64,7 @@ func TestClientStartStop(t *testing.T) {
 func TestMaxRequestTime(t *testing.T) {
 	s := &Server{
 		Addr: ":15357",
-		Handler: func(remoteAddr string, request interface{}) interface{} {
+		Handler: func(clientAddr string, request interface{}) interface{} {
 			time.Sleep(10 * time.Second)
 			return request
 		},
@@ -93,7 +93,7 @@ func TestMaxRequestTime(t *testing.T) {
 func TestSendTimeout(t *testing.T) {
 	s := &Server{
 		Addr: ":15358",
-		Handler: func(remoteAddr string, request interface{}) interface{} {
+		Handler: func(clientAddr string, request interface{}) interface{} {
 			time.Sleep(10 * time.Second)
 			return request
 		},
@@ -121,7 +121,7 @@ func TestSendTimeout(t *testing.T) {
 func TestIntHandler(t *testing.T) {
 	s := &Server{
 		Addr:    ":15347",
-		Handler: func(remoteAddr string, request interface{}) interface{} { return request.(int) + 234 },
+		Handler: func(clientAddr string, request interface{}) interface{} { return request.(int) + 234 },
 	}
 	s.Start()
 	defer s.Stop()
@@ -150,7 +150,7 @@ func TestIntHandler(t *testing.T) {
 func TestStringHandler(t *testing.T) {
 	s := &Server{
 		Addr:    ":15348",
-		Handler: func(remoteAddr string, request interface{}) interface{} { return request.(string) + " world" },
+		Handler: func(clientAddr string, request interface{}) interface{} { return request.(string) + " world" },
 	}
 	s.Start()
 	defer s.Stop()
@@ -186,7 +186,7 @@ func TestStructHandler(t *testing.T) {
 
 	s := &Server{
 		Addr:    ":15349",
-		Handler: func(remoteAddr string, request interface{}) interface{} { return request.(*S) },
+		Handler: func(clientAddr string, request interface{}) interface{} { return request.(*S) },
 	}
 	s.Start()
 	defer s.Stop()
@@ -225,7 +225,7 @@ func TestEchoHandler(t *testing.T) {
 
 	s := &Server{
 		Addr:    ":15350",
-		Handler: func(remoteAddr string, request interface{}) interface{} { return request },
+		Handler: func(clientAddr string, request interface{}) interface{} { return request },
 	}
 	s.Start()
 	defer s.Stop()
@@ -276,7 +276,7 @@ func TestEchoHandler(t *testing.T) {
 func TestConcurrentSend(t *testing.T) {
 	s := &Server{
 		Addr:       ":15351",
-		Handler:    func(remoteAddr string, request interface{}) interface{} { return request },
+		Handler:    func(clientAddr string, request interface{}) interface{} { return request },
 		FlushDelay: time.Millisecond,
 	}
 	s.Start()
@@ -312,7 +312,7 @@ func TestConcurrentSend(t *testing.T) {
 func TestCompress(t *testing.T) {
 	s := &Server{
 		Addr:       ":15352",
-		Handler:    func(remoteAddr string, request interface{}) interface{} { return request },
+		Handler:    func(clientAddr string, request interface{}) interface{} { return request },
 		FlushDelay: time.Millisecond,
 	}
 	s.Start()
