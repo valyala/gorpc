@@ -106,16 +106,17 @@ func (c *Client) SendWithTimeout(request interface{}, timeout time.Duration) int
 		Request: request,
 		Done:    make(chan struct{}, 1),
 	}
+	tc := time.After(timeout)
 	select {
 	case c.requestsChan <- &m:
 		select {
 		case <-m.Done:
 			return m.Response
-		case <-time.After(timeout):
+		case <-tc:
 			logError("rpc.Client: [%s]. Cannot obtain request during timeout=%s", c.Addr, timeout)
 			return nil
 		}
-	default:
+	case <-tc:
 		logError("rpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
 		return nil
 	}
