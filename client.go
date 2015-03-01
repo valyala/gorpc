@@ -190,7 +190,7 @@ func clientHandler(c *Client) {
 
 func clientHandleConnection(c *Client, conn net.Conn) {
 	var buf [1]byte
-	if c.DisableCompression {
+	if !c.DisableCompression {
 		buf[0] = 1
 	}
 	_, err := conn.Write(buf[:])
@@ -252,7 +252,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 
 	ww := bw
 	var zw *flate.Writer
-	if c.DisableCompression {
+	if !c.DisableCompression {
 		zw, _ = flate.NewWriter(bw, flate.BestSpeed)
 		defer zw.Close()
 		ww = bufio.NewWriterSize(zw, c.SendBufferSize)
@@ -272,7 +272,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 				flushChan = time.After(c.FlushDelay)
 			}
 		case <-flushChan:
-			if c.DisableCompression {
+			if !c.DisableCompression {
 				if err := ww.Flush(); err != nil {
 					err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush data to compressed stream: [%s]", c.Addr, err)
 					return
@@ -319,7 +319,7 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 	br := bufio.NewReaderSize(r, c.RecvBufferSize)
 
 	rr := br
-	if c.DisableCompression {
+	if !c.DisableCompression {
 		zr := flate.NewReader(br)
 		defer zr.Close()
 		rr = bufio.NewReaderSize(zr, c.RecvBufferSize)
