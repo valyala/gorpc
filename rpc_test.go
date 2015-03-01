@@ -61,7 +61,7 @@ func TestClientStartStop(t *testing.T) {
 	}
 }
 
-func TestMaxRequestTime(t *testing.T) {
+func TestRequestTimeout(t *testing.T) {
 	s := &Server{
 		Addr: ":15357",
 		Handler: func(clientAddr string, request interface{}) interface{} {
@@ -74,7 +74,7 @@ func TestMaxRequestTime(t *testing.T) {
 
 	c := &Client{
 		Addr:           ":15357",
-		MaxRequestTime: time.Millisecond,
+		RequestTimeout: time.Millisecond,
 	}
 	c.Start()
 	defer c.Stop()
@@ -121,7 +121,7 @@ func TestSendTimeout(t *testing.T) {
 func TestNoServer(t *testing.T) {
 	c := &Client{
 		Addr:           ":16368",
-		MaxRequestTime: 100 * time.Millisecond,
+		RequestTimeout: 100 * time.Millisecond,
 	}
 	c.Start()
 	defer c.Stop()
@@ -174,7 +174,7 @@ func TestServerStuck(t *testing.T) {
 	c := &Client{
 		Addr:                 ":16359",
 		PendingRequestsCount: 100,
-		MaxRequestTime:       300 * time.Millisecond,
+		RequestTimeout:       300 * time.Millisecond,
 	}
 	c.Start()
 	defer c.Stop()
@@ -195,7 +195,7 @@ func TestServerStuck(t *testing.T) {
 			if resp != nil {
 				t.Fatalf("Unexpected response from stuck server: %+v", resp)
 			}
-			if time.Since(startT) > c.MaxRequestTime {
+			if time.Since(startT) > c.RequestTimeout {
 				timeoutErrors++
 			} else {
 				stuckErrors++

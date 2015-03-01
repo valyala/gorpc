@@ -39,7 +39,7 @@ type Client struct {
 
 	// Maximum request time.
 	// Default value is 30s.
-	MaxRequestTime time.Duration
+	RequestTimeout time.Duration
 
 	// Disable data compression.
 	// By default data compression is enabled.
@@ -76,8 +76,8 @@ func (c *Client) Start() {
 	if c.FlushDelay <= 0 {
 		c.FlushDelay = 5 * time.Millisecond
 	}
-	if c.MaxRequestTime <= 0 {
-		c.MaxRequestTime = 30 * time.Second
+	if c.RequestTimeout <= 0 {
+		c.RequestTimeout = 30 * time.Second
 	}
 	if c.SendBufferSize <= 0 {
 		c.SendBufferSize = 1024 * 1024
@@ -107,7 +107,7 @@ func (c *Client) Stop() {
 
 // Sends the given request to the server and obtains response from the server.
 // Returns non-nil error if the response cannot be obtained during
-// Client.MaxRequestTime or server connection problems occur.
+// Client.RequestTimeout or server connection problems occur.
 //
 // Request and response types may be arbitrary. All the response types
 // the server may return must be registered via gorpc.RegisterType() before
@@ -117,7 +117,7 @@ func (c *Client) Stop() {
 //
 // Don't forget starting the client with Client.Start() before calling Client.Send().
 func (c *Client) Send(request interface{}) (response interface{}, err error) {
-	return c.SendTimeout(request, c.MaxRequestTime)
+	return c.SendTimeout(request, c.RequestTimeout)
 }
 
 // Sends the given request to the server and obtains response from the server.
