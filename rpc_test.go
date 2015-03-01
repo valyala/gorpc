@@ -118,6 +118,97 @@ func TestSendTimeout(t *testing.T) {
 	}
 }
 
+func TestNoServer(t *testing.T) {
+	c := &Client{
+		Addr:           ":16368",
+		MaxRequestTime: 100 * time.Millisecond,
+	}
+	c.Start()
+	defer c.Stop()
+
+	resp, err := c.Send("foobar")
+	if err == nil {
+		t.Fatalf("Unexpected nil error")
+	}
+	if resp != nil {
+		t.Fatalf("Unepxected response: %+v. Expected nil", resp)
+	}
+}
+
+func TestServerPanic(t *testing.T) {
+	s := &Server{
+		Addr: ":16358",
+		Handler: func(clientAddr string, request interface{}) interface{} {
+			panic("server panic")
+		},
+	}
+	s.Start()
+	defer s.Stop()
+
+	c := &Client{
+		Addr: ":16358",
+	}
+	c.Start()
+	defer c.Stop()
+
+	resp, err := c.Send("foobar")
+	if err != nil {
+		t.Fatalf("Unexpected error: [%s]", err)
+	}
+	if resp != nil {
+		t.Fatalf("Unepxected response for panicing server: %+v. Expected nil", resp)
+	}
+}
+
+func TestServerStuck(t *testing.T) {
+	s := &Server{
+		Addr: ":16359",
+		Handler: func(clientAddr string, request interface{}) interface{} {
+			time.Sleep(time.Second)
+			return "aaa"
+		},
+	}
+	s.Start()
+	defer s.Stop()
+
+	c := &Client{
+		Addr:                 ":16359",
+		PendingRequestsCount: 100,
+		MaxRequestTime:       300 * time.Millisecond,
+	}
+	c.Start()
+	defer c.Stop()
+
+	startT := time.Now()
+	timeoutErrors := 0
+	stuckErrors := 0
+
+	var wg sync.WaitGroup
+	for i := 0; i < 2000; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp, err := c.Send("abc")
+			if err == nil {
+				t.Fatalf("Stuck server returned response? %+v", resp)
+			}
+			if resp != nil {
+				t.Fatalf("Unexpected response from stuck server: %+v", resp)
+			}
+			if time.Since(startT) > c.MaxRequestTime {
+				timeoutErrors++
+			} else {
+				stuckErrors++
+			}
+		}()
+	}
+	wg.Wait()
+
+	if timeoutErrors > stuckErrors {
+		t.Fatalf("Stuck server detector doesn't work? timeoutErrors=%d > stuckErrors=%d", timeoutErrors, stuckErrors)
+	}
+}
+
 func TestIntHandler(t *testing.T) {
 	s := &Server{
 		Addr:    ":15347",
