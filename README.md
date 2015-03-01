@@ -17,7 +17,8 @@ features useful for highly loaded rpc applications:
 * It minimizes the number of recv() syscalls by reading and buffering as much
   as possible data from the network.
 
-These features help the OS minimizing overhead (CPU load, the number of network
+These features help the OS minimizing overhead (CPU load, the number of
+TCP connections in TIME_WAIT and CLOSE_WAIT states, the number of network
 packets and the amount of network bandwidth) required for rpc processing under
 high load.
 
