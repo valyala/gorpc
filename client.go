@@ -193,7 +193,8 @@ func clientHandleConnection(c *Client, conn net.Conn) {
 	if c.DisableCompression {
 		buf[0] = 1
 	}
-	if _, err := conn.Write(buf[:]); err != nil {
+	_, err := conn.Write(buf[:])
+	if err != nil {
 		logError("gorpc.Client: [%s]. Error when writing handshake to server: [%s]", c.Addr, err)
 		conn.Close()
 		return
@@ -204,18 +205,18 @@ func clientHandleConnection(c *Client, conn net.Conn) {
 	pendingRequests := make(map[uint64]*clientMessage)
 	var pendingRequestsLock sync.Mutex
 
-	writerDone := make(chan struct{}, 1)
+	writerDone := make(chan error, 1)
 	go clientWriter(c, conn, pendingRequests, &pendingRequestsLock, stopChan, writerDone)
 
-	readerDone := make(chan struct{}, 1)
+	readerDone := make(chan error, 1)
 	go clientReader(c, conn, pendingRequests, &pendingRequestsLock, readerDone)
 
 	select {
-	case <-writerDone:
+	case err = <-writerDone:
 		close(stopChan)
 		conn.Close()
 		<-readerDone
-	case <-readerDone:
+	case err = <-readerDone:
 		close(stopChan)
 		conn.Close()
 		<-writerDone
@@ -226,8 +227,11 @@ func clientHandleConnection(c *Client, conn net.Conn) {
 		<-writerDone
 	}
 
+	if err != nil {
+		logError("%s", err)
+	}
 	for _, m := range pendingRequests {
-		m.Error = fmt.Errorf("gorpc.Client: [%s]. Server connection error occured or Client.Stop() called", c.Addr)
+		m.Error = err
 		close(m.Done)
 	}
 }
@@ -239,8 +243,9 @@ type clientMessage struct {
 	Error    error
 }
 
-func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMessage, pendingRequestsLock *sync.Mutex, stopChan <-chan struct{}, done chan<- struct{}) {
-	defer func() { done <- struct{}{} }()
+func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMessage, pendingRequestsLock *sync.Mutex, stopChan <-chan struct{}, done chan<- error) {
+	var err error
+	defer func() { done <- err }()
 
 	var msgID uint64
 	bw := bufio.NewWriterSize(w, c.SendBufferSize)
@@ -269,16 +274,16 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 		case <-flushChan:
 			if c.DisableCompression {
 				if err := ww.Flush(); err != nil {
-					logError("gorpc.Client: [%s]. Cannot flush data to compressed stream: [%s]", c.Addr, err)
+					err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush data to compressed stream: [%s]", c.Addr, err)
 					return
 				}
 				if err := zw.Flush(); err != nil {
-					logError("gorpc.Client: [%s]. Cannot flush compressed data to wire: [%s]", c.Addr, err)
+					err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush compressed data to wire: [%s]", c.Addr, err)
 					return
 				}
 			}
 			if err := bw.Flush(); err != nil {
-				logError("gorpc.Client: [%s]. Cannot flush requests to wire: [%s]", c.Addr, err)
+				err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush requests to wire: [%s]", c.Addr, err)
 				return
 			}
 			flushChan = nil
@@ -287,29 +292,29 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 
 		msgID++
 		pendingRequestsLock.Lock()
+		n := len(pendingRequests)
 		pendingRequests[msgID] = rpcM
 		pendingRequestsLock.Unlock()
+
+		if n > 10*c.PendingRequestsCount {
+			err = fmt.Errorf("gorpc.Client: [%s]. The server didn't return %d responses yet. Closing server connection in order to prevent client resource leaks", c.Addr, n)
+			return
+		}
 
 		m := wireMessage{
 			ID:   msgID,
 			Data: rpcM.Request,
 		}
 		if err := e.Encode(&m); err != nil {
-			rpcM.Error = fmt.Errorf("gorpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
-			logError("%s", rpcM.Error)
-			close(rpcM.Done)
-
-			pendingRequestsLock.Lock()
-			delete(pendingRequests, msgID)
-			pendingRequestsLock.Unlock()
-
+			err = fmt.Errorf("gorpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
 			return
 		}
 	}
 }
 
-func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMessage, pendingRequestsLock *sync.Mutex, done chan<- struct{}) {
-	defer func() { done <- struct{}{} }()
+func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMessage, pendingRequestsLock *sync.Mutex, done chan<- error) {
+	var err error
+	defer func() { done <- err }()
 
 	br := bufio.NewReaderSize(r, c.RecvBufferSize)
 
@@ -324,7 +329,7 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 	for {
 		var m wireMessage
 		if err := d.Decode(&m); err != nil {
-			logError("gorpc.Client: [%s]. Cannot decode response: [%s]", c.Addr, err)
+			err = fmt.Errorf("gorpc.Client: [%s]. Cannot decode response: [%s]", c.Addr, err)
 			return
 		}
 
@@ -333,7 +338,7 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 		delete(pendingRequests, m.ID)
 		pendingRequestsLock.Unlock()
 		if !ok {
-			logError("gorpc.Client: [%s]. Unexpected msgID=[%d] obtained from server", c.Addr, m.ID)
+			err = fmt.Errorf("gorpc.Client: [%s]. Unexpected msgID=[%d] obtained from server", c.Addr, m.ID)
 			return
 		}
 
