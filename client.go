@@ -31,7 +31,7 @@ type Client struct {
 
 	// The maximum number of pending requests in the queue.
 	// Default is 32768.
-	PendingRequestsCount int
+	PendingRequests int
 
 	// Delay between request flushes.
 	// Default value is 5ms.
@@ -70,8 +70,8 @@ func (c *Client) Start() {
 		panic("gorpc.Client: the given client is already started. Call Client.Stop() before calling Client.Start() again!")
 	}
 
-	if c.PendingRequestsCount <= 0 {
-		c.PendingRequestsCount = 32768
+	if c.PendingRequests <= 0 {
+		c.PendingRequests = 32768
 	}
 	if c.FlushDelay <= 0 {
 		c.FlushDelay = 5 * time.Millisecond
@@ -86,7 +86,7 @@ func (c *Client) Start() {
 		c.RecvBufferSize = 1024 * 1024
 	}
 
-	c.requestsChan = make(chan *clientMessage, c.PendingRequestsCount)
+	c.requestsChan = make(chan *clientMessage, c.PendingRequests)
 	c.clientStopChan = make(chan struct{})
 
 	if c.Conns <= 0 {
@@ -296,7 +296,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 		pendingRequests[msgID] = rpcM
 		pendingRequestsLock.Unlock()
 
-		if n > 10*c.PendingRequestsCount {
+		if n > 10*c.PendingRequests {
 			err = fmt.Errorf("gorpc.Client: [%s]. The server didn't return %d responses yet. Closing server connection in order to prevent client resource leaks", c.Addr, n)
 			return
 		}

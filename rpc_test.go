@@ -172,9 +172,9 @@ func TestServerStuck(t *testing.T) {
 	defer s.Stop()
 
 	c := &Client{
-		Addr:                 ":16359",
-		PendingRequestsCount: 100,
-		RequestTimeout:       300 * time.Millisecond,
+		Addr:            ":16359",
+		PendingRequests: 100,
+		RequestTimeout:  300 * time.Millisecond,
 	}
 	c.Start()
 	defer c.Stop()
