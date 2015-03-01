@@ -122,9 +122,9 @@ func (c *Client) Stop() {
 // There is no need in registering base Go types such as int, string, bool,
 // float64, etc. or arrays, slices and maps containing base Go types.
 //
-// Don't forget starting the client with Client.Start() before calling Client.Send().
-func (c *Client) Send(request interface{}) (response interface{}, err error) {
-	return c.SendTimeout(request, c.RequestTimeout)
+// Don't forget starting the client with Client.Start() before calling Client.Call().
+func (c *Client) Call(request interface{}) (response interface{}, err error) {
+	return c.CallTimeout(request, c.RequestTimeout)
 }
 
 // Sends the given request to the server and obtains response from the server.
@@ -137,8 +137,8 @@ func (c *Client) Send(request interface{}) (response interface{}, err error) {
 // There is no need in registering base Go types such as int, string, bool,
 // float64, etc. or arrays, slices and maps containing base Go types.
 //
-// Don't forget starting the client with Client.Start() before calling Client.Send().
-func (c *Client) SendTimeout(request interface{}, timeout time.Duration) (response interface{}, err error) {
+// Don't forget starting the client with Client.Start() before calling Client.Call().
+func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (response interface{}, err error) {
 	m := clientMessage{
 		Request: request,
 		Done:    make(chan struct{}),

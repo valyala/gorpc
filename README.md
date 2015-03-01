@@ -54,7 +54,7 @@ c := &Client{
 }
 c.Start()
 
-resp, err := c.Send("foobar")
+resp, err := c.Call("foobar")
 if err != nil {
 	log.Fatalf("Error when sending request to server: %s", err)
 }

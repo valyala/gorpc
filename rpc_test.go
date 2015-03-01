@@ -80,7 +80,7 @@ func TestRequestTimeout(t *testing.T) {
 	defer c.Stop()
 
 	for i := 0; i < 10; i++ {
-		resp, err := c.Send(123)
+		resp, err := c.Call(123)
 		if err == nil {
 			t.Fatalf("Timeout error must be returned")
 		}
@@ -90,7 +90,7 @@ func TestRequestTimeout(t *testing.T) {
 	}
 }
 
-func TestSendTimeout(t *testing.T) {
+func TestCallTimeout(t *testing.T) {
 	s := &Server{
 		Addr: ":15358",
 		Handler: func(clientAddr string, request interface{}) interface{} {
@@ -108,7 +108,7 @@ func TestSendTimeout(t *testing.T) {
 	defer c.Stop()
 
 	for i := 0; i < 10; i++ {
-		resp, err := c.SendTimeout(123, time.Millisecond)
+		resp, err := c.CallTimeout(123, time.Millisecond)
 		if err == nil {
 			t.Fatalf("Timeout error must be returned")
 		}
@@ -126,7 +126,7 @@ func TestNoServer(t *testing.T) {
 	c.Start()
 	defer c.Stop()
 
-	resp, err := c.Send("foobar")
+	resp, err := c.Call("foobar")
 	if err == nil {
 		t.Fatalf("Unexpected nil error")
 	}
@@ -151,7 +151,7 @@ func TestServerPanic(t *testing.T) {
 	c.Start()
 	defer c.Stop()
 
-	resp, err := c.Send("foobar")
+	resp, err := c.Call("foobar")
 	if err != nil {
 		t.Fatalf("Unexpected error: [%s]", err)
 	}
@@ -188,7 +188,7 @@ func TestServerStuck(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			resp, err := c.Send("abc")
+			resp, err := c.Call("abc")
 			if err == nil {
 				t.Fatalf("Stuck server returned response? %+v", resp)
 			}
@@ -224,7 +224,7 @@ func TestIntHandler(t *testing.T) {
 	defer c.Stop()
 
 	for i := 0; i < 10; i++ {
-		resp, err := c.Send(i)
+		resp, err := c.Call(i)
 		if err != nil {
 			t.Fatalf("Unexpected error: [%s]", err)
 		}
@@ -253,7 +253,7 @@ func TestStringHandler(t *testing.T) {
 	defer c.Stop()
 
 	for i := 0; i < 10; i++ {
-		resp, err := c.Send(fmt.Sprintf("hello %d,", i))
+		resp, err := c.Call(fmt.Sprintf("hello %d,", i))
 		if err != nil {
 			t.Fatalf("Unexpected error: [%s]", err)
 		}
@@ -289,7 +289,7 @@ func TestStructHandler(t *testing.T) {
 	defer c.Stop()
 
 	for i := 0; i < 10; i++ {
-		resp, err := c.Send(&S{
+		resp, err := c.Call(&S{
 			A: i,
 			B: fmt.Sprintf("aaa %d", i),
 		})
@@ -327,7 +327,7 @@ func TestEchoHandler(t *testing.T) {
 	c.Start()
 	defer c.Stop()
 
-	resp, err := c.Send(1234)
+	resp, err := c.Call(1234)
 	if err != nil {
 		t.Fatalf("Unexpected error: [%s]", err)
 	}
@@ -339,7 +339,7 @@ func TestEchoHandler(t *testing.T) {
 		t.Fatalf("Unexpected value returned: %d. Expected 1234", expInt)
 	}
 
-	resp, err = c.Send("abc")
+	resp, err = c.Call("abc")
 	if err != nil {
 		t.Fatalf("Unexpected error: [%s]", err)
 	}
@@ -351,7 +351,7 @@ func TestEchoHandler(t *testing.T) {
 		t.Fatalf("Unexpected value returned: %s. Expected 'abc'", expStr)
 	}
 
-	resp, err = c.Send(&SS{A: 432, B: "ssd"})
+	resp, err = c.Call(&SS{A: 432, B: "ssd"})
 	if err != nil {
 		t.Fatalf("Unexpected error: [%s]", err)
 	}
@@ -364,7 +364,7 @@ func TestEchoHandler(t *testing.T) {
 	}
 }
 
-func TestConcurrentSend(t *testing.T) {
+func TestConcurrentCall(t *testing.T) {
 	s := &Server{
 		Addr:       ":15351",
 		Handler:    func(clientAddr string, request interface{}) interface{} { return request },
@@ -387,7 +387,7 @@ func TestConcurrentSend(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
-				resp, err := c.Send(j)
+				resp, err := c.Call(j)
 				if err != nil {
 					t.Fatalf("Unexpected error: [%s]", err)
 				}
@@ -433,14 +433,14 @@ func TestCompress(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < 50; j++ {
 				s := fmt.Sprintf("foo bar baz %d aaabbb", j)
-				resp, err := c1.Send(s)
+				resp, err := c1.Call(s)
 				if err != nil {
 					t.Fatalf("Unexpected error: [%s]", err)
 				}
 				if resp.(string) != s {
 					t.Fatalf("Unexpected value: %s. Expected %s", resp, s)
 				}
-				resp, err = c2.Send(i + j)
+				resp, err = c2.Call(i + j)
 				if err != nil {
 					t.Fatalf("Unexpected error: [%s]", err)
 				}
