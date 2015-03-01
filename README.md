@@ -1,11 +1,11 @@
 gorpc
 =====
 
-Simple, fast and scalable rpc library for high load.
+Simple, fast and scalable RPC library for high load.
 
 Unlike standard library at http://golang.org/pkg/net/rpc/ it multiplexes
 requests over a small number of TCP connections. This provides the following
-features useful for highly loaded rpc applications:
+features useful for highly loaded RPC projects:
 
 * It minimizes the number of connect() syscalls by pipelining request
   and response messages over a single TCP connection.
@@ -19,7 +19,7 @@ features useful for highly loaded rpc applications:
 
 These features help the OS minimizing overhead (CPU load, the number of
 TCP connections in TIME_WAIT and CLOSE_WAIT states, the number of network
-packets and the amount of network bandwidth) required for rpc processing under
+packets and the amount of network bandwidth) required for RPC processing under
 high load.
 
 Currently gorpc with default settings is successfully used in highly loaded
