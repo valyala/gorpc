@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -52,6 +53,12 @@ type Client struct {
 	// Size of recv buffer per each TCP connection in bytes.
 	// Default value is 1M.
 	RecvBufferSize int
+
+	// Connection statistics.
+	//
+	// The stats doesn't reset automatically. Feel free resetting it
+	// any time you wish.
+	Stats ConnStats
 
 	requestsChan chan *clientMessage
 
@@ -166,19 +173,20 @@ func clientHandler(c *Client) {
 	var err error
 
 	for {
-		dialChan := make(chan struct{}, 1)
+		dialChan := make(chan struct{})
 		go func() {
 			if conn, err = dialer.Dial("tcp", c.Addr); err != nil {
 				logError("gorpc.Client: [%s]. Cannot establish rpc connection: [%s]", c.Addr, err)
 				time.Sleep(time.Second)
 			}
-			dialChan <- struct{}{}
+			close(dialChan)
 		}()
 
 		select {
 		case <-c.clientStopChan:
 			return
 		case <-dialChan:
+			atomic.AddUint64(&c.Stats.DialCalls, 1)
 		}
 
 		if err != nil {
@@ -246,6 +254,12 @@ type clientMessage struct {
 func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMessage, pendingRequestsLock *sync.Mutex, stopChan <-chan struct{}, done chan<- error) {
 	var err error
 	defer func() { done <- err }()
+
+	w = &writerCounter{
+		W:            w,
+		BytesWritten: &c.Stats.BytesWritten,
+		WriteCalls:   &c.Stats.WriteCalls,
+	}
 
 	var msgID uint64
 	bw := bufio.NewWriterSize(w, c.SendBufferSize)
@@ -315,6 +329,12 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMessage, pendingRequestsLock *sync.Mutex, done chan<- error) {
 	var err error
 	defer func() { done <- err }()
+
+	r = &readerCounter{
+		R:         r,
+		BytesRead: &c.Stats.BytesRead,
+		ReadCalls: &c.Stats.ReadCalls,
+	}
 
 	br := bufio.NewReaderSize(r, c.RecvBufferSize)
 

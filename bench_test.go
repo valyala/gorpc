@@ -3,6 +3,7 @@ package gorpc
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"sync"
 	"testing"
 )
@@ -226,6 +227,10 @@ func benchEchoFunc(b *testing.B, workers int, disableCompression bool, f func(*C
 	close(ch)
 
 	wg.Wait()
+
+	log.Printf("\n")
+	log.Printf("Client stats=%+v\n", c.Stats)
+	log.Printf("Server stats=%+v\n", s.Stats)
 }
 
 func createEchoServerAndClient(disableCompression bool, pendingMessages int) (s *Server, c *Client) {

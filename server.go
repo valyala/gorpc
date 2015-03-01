@@ -9,6 +9,7 @@ import (
 	"net"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -51,6 +52,12 @@ type Server struct {
 	// Size of recv buffer per each TCP connection in bytes.
 	// Default is 1M.
 	RecvBufferSize int
+
+	// Connection statistics.
+	//
+	// The stats doesn't reset automatically. Feel free resetting it
+	// any time you wish.
+	Stats ConnStats
 
 	serverStopChan chan struct{}
 	stopWg         sync.WaitGroup
@@ -120,13 +127,13 @@ func serverHandler(s *Server, ln net.Listener) {
 	var err error
 
 	for {
-		acceptChan := make(chan struct{}, 1)
+		acceptChan := make(chan struct{})
 		go func() {
 			if conn, err = ln.Accept(); err != nil {
 				logError("gorpc.Server: [%s]. Cannot accept new connection: [%s]", s.Addr, err)
 				time.Sleep(time.Second)
 			}
-			acceptChan <- struct{}{}
+			close(acceptChan)
 		}()
 
 		select {
@@ -134,6 +141,7 @@ func serverHandler(s *Server, ln net.Listener) {
 			ln.Close()
 			return
 		case <-acceptChan:
+			atomic.AddUint64(&s.Stats.AcceptCalls, 1)
 		}
 
 		if err != nil {
@@ -190,11 +198,11 @@ func serverHandleConnection(s *Server, conn net.Conn) {
 	responsesChan := make(chan *serverMessage, s.PendingResponses)
 	stopChan := make(chan struct{})
 
-	readerDone := make(chan struct{}, 1)
+	readerDone := make(chan struct{})
 	clientAddr := conn.RemoteAddr().String()
 	go serverReader(s, conn, clientAddr, responsesChan, stopChan, readerDone, enabledCompression)
 
-	writerDone := make(chan struct{}, 1)
+	writerDone := make(chan struct{})
 	go serverWriter(s, conn, clientAddr, responsesChan, stopChan, writerDone, enabledCompression)
 
 	select {
@@ -222,7 +230,13 @@ type serverMessage struct {
 }
 
 func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
-	defer func() { done <- struct{}{} }()
+	defer func() { close(done) }()
+
+	r = &readerCounter{
+		R:         r,
+		BytesRead: &s.Stats.BytesRead,
+		ReadCalls: &s.Stats.ReadCalls,
+	}
 
 	br := bufio.NewReaderSize(r, s.RecvBufferSize)
 
@@ -269,7 +283,13 @@ func serveRequest(s *Server, responsesChan chan<- *serverMessage, stopChan <-cha
 }
 
 func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-chan *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
-	defer func() { done <- struct{}{} }()
+	defer func() { close(done) }()
+
+	w = &writerCounter{
+		W:            w,
+		BytesWritten: &s.Stats.BytesWritten,
+		WriteCalls:   &s.Stats.WriteCalls,
+	}
 
 	bw := bufio.NewWriterSize(w, s.SendBufferSize)
 

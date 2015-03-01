@@ -25,13 +25,6 @@ Currently gorpc with default settings is successfully used in highly loaded
 production environment serving up to 40K qps. Switching from http-based rpc
 to gorpc reduced required network bandwidth from 300 Mbit/s to 24 Mbit/s.
 
-
-Docs
-====
-
-See http://godoc.org/github.com/valyala/gorpc .
-
-
 Usage
 =====
 
@@ -69,4 +62,13 @@ if resp.(string) != "foobar" {
 }
 ```
 
+Both client and server collect connection stats - the number of bytes
+read / written and the number of calls to send(), recv(), connect()
+and accept(). This stats is available at Client.Stats and Server.Stats.
+
 See tests for more usage examples.
+
+Docs
+====
+
+See http://godoc.org/github.com/valyala/gorpc .
