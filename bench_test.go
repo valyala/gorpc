@@ -128,7 +128,7 @@ func Benchmark_EchoStruct_Nocompress_10000_Workers(b *testing.B) {
 }
 
 func benchEchoInt(b *testing.B, workers int, disableCompression bool) {
-	benchFunc(b, workers, disableCompression, func(c *Client, n int) {
+	benchEchoFunc(b, workers, disableCompression, func(c *Client, n int) {
 		resp, err := c.Send(n)
 		if err != nil {
 			b.Fatalf("Unexpected error: [%s]", err)
@@ -147,7 +147,7 @@ func benchEchoInt(b *testing.B, workers int, disableCompression bool) {
 }
 
 func benchEchoString(b *testing.B, workers int, disableCompression bool) {
-	benchFunc(b, workers, disableCompression, func(c *Client, n int) {
+	benchEchoFunc(b, workers, disableCompression, func(c *Client, n int) {
 		s := fmt.Sprintf("test string %d", n)
 		resp, err := c.Send(s)
 		if err != nil {
@@ -175,7 +175,7 @@ func benchEchoStruct(b *testing.B, workers int, disableCompression bool) {
 
 	RegisterType(&BenchEchoStruct{})
 
-	benchFunc(b, workers, disableCompression, func(c *Client, n int) {
+	benchEchoFunc(b, workers, disableCompression, func(c *Client, n int) {
 		s := &BenchEchoStruct{
 			A: n,
 			B: fmt.Sprintf("test string %d", n),
@@ -198,8 +198,8 @@ func benchEchoStruct(b *testing.B, workers int, disableCompression bool) {
 	})
 }
 
-func benchFunc(b *testing.B, workers int, disableCompression bool, f func(*Client, int)) {
-	s, c := createEchoServerAndClient(disableCompression)
+func benchEchoFunc(b *testing.B, workers int, disableCompression bool, f func(*Client, int)) {
+	s, c := createEchoServerAndClient(disableCompression, b.N)
 	defer s.Stop()
 	defer c.Stop()
 
@@ -228,16 +228,18 @@ func benchFunc(b *testing.B, workers int, disableCompression bool, f func(*Clien
 	wg.Wait()
 }
 
-func createEchoServerAndClient(disableCompression bool) (s *Server, c *Client) {
+func createEchoServerAndClient(disableCompression bool, pendingMessages int) (s *Server, c *Client) {
 	s = &Server{
-		Addr:    ":15347",
-		Handler: func(clientAddr string, request interface{}) interface{} { return request },
+		Addr:             ":15347",
+		Handler:          func(clientAddr string, request interface{}) interface{} { return request },
+		PendingResponses: pendingMessages,
 	}
 	s.Start()
 
 	c = &Client{
 		Addr:               ":15347",
 		DisableCompression: disableCompression,
+		PendingRequests:    pendingMessages,
 	}
 	c.Start()
 

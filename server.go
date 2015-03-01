@@ -38,7 +38,7 @@ type Server struct {
 
 	// The maximum number of pending responses in the queue.
 	// Default is 32768.
-	PendingResponsesCount int
+	PendingResponses int
 
 	// The maximum delay between response flushes to clients.
 	// Default is 5ms.
@@ -72,8 +72,8 @@ func (s *Server) Start() error {
 	}
 	s.serverStopChan = make(chan struct{})
 
-	if s.PendingResponsesCount <= 0 {
-		s.PendingResponsesCount = 32768
+	if s.PendingResponses <= 0 {
+		s.PendingResponses = 32768
 	}
 	if s.FlushDelay <= 0 {
 		s.FlushDelay = 5 * time.Millisecond
@@ -187,7 +187,7 @@ func serverHandleConnection(s *Server, conn net.Conn) {
 		return
 	}
 
-	responsesChan := make(chan *serverMessage, s.PendingResponsesCount)
+	responsesChan := make(chan *serverMessage, s.PendingResponses)
 	stopChan := make(chan struct{})
 
 	readerDone := make(chan struct{}, 1)
