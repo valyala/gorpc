@@ -5,6 +5,21 @@ import (
 	"io"
 	"log"
 	"sync/atomic"
+	"time"
+)
+
+const (
+	// Default timeout for the request on the Client.
+	DefaultRequestTimeout = 20 * time.Second
+
+	// Default number of pending messages handled by Client and Server.
+	DefaultPendingMessages = 32 * 1024
+
+	// Default delay between message flushes on Client and Server.
+	DefaultFlushDelay = 5 * time.Millisecond
+
+	// Default size for Client and Server buffers (both write and read)
+	DefaultBufferSize = 1024 * 1024
 )
 
 // LoggerFunc is an error logging function to pass to gorpc.SetErrorLogger().

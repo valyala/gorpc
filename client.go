@@ -30,15 +30,15 @@ type Client struct {
 	Conns int
 
 	// The maximum number of pending requests in the queue.
-	// Default is 32768.
+	// Default is DefaultPendingMessages.
 	PendingRequests int
 
 	// Delay between request flushes.
-	// Default value is 5ms.
+	// Default value is DefaultFlushDelay.
 	FlushDelay time.Duration
 
 	// Maximum request time.
-	// Default value is 30s.
+	// Default value is DefaultRequestTimeout.
 	RequestTimeout time.Duration
 
 	// Disable data compression.
@@ -46,11 +46,11 @@ type Client struct {
 	DisableCompression bool
 
 	// Size of send buffer per each TCP connection in bytes.
-	// Default value is 1M.
+	// Default value is DefaultBufferSize.
 	SendBufferSize int
 
 	// Size of recv buffer per each TCP connection in bytes.
-	// Default value is 1M.
+	// Default value is DefaultBufferSize.
 	RecvBufferSize int
 
 	// The client calls this callback when it needs new connection
@@ -98,19 +98,19 @@ func (c *Client) Start() {
 	}
 
 	if c.PendingRequests <= 0 {
-		c.PendingRequests = 32768
+		c.PendingRequests = DefaultPendingMessages
 	}
 	if c.FlushDelay <= 0 {
-		c.FlushDelay = 5 * time.Millisecond
+		c.FlushDelay = DefaultFlushDelay
 	}
 	if c.RequestTimeout <= 0 {
-		c.RequestTimeout = 30 * time.Second
+		c.RequestTimeout = DefaultRequestTimeout
 	}
 	if c.SendBufferSize <= 0 {
-		c.SendBufferSize = 1024 * 1024
+		c.SendBufferSize = DefaultBufferSize
 	}
 	if c.RecvBufferSize <= 0 {
-		c.RecvBufferSize = 1024 * 1024
+		c.RecvBufferSize = DefaultBufferSize
 	}
 
 	c.requestsChan = make(chan *clientMessage, c.PendingRequests)
