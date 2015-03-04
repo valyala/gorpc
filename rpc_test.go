@@ -531,9 +531,8 @@ func TestEchoHandler(t *testing.T) {
 
 func TestConcurrentCall(t *testing.T) {
 	s := &Server{
-		Addr:       ":15351",
-		Handler:    func(clientAddr string, request interface{}) interface{} { return request },
-		FlushDelay: time.Millisecond,
+		Addr:    ":15351",
+		Handler: func(clientAddr string, request interface{}) interface{} { return request },
 	}
 	if err := s.Start(); err != nil {
 		t.Fatalf("Server.Start() failed: [%s]", err)
@@ -541,9 +540,8 @@ func TestConcurrentCall(t *testing.T) {
 	defer s.Stop()
 
 	c := &Client{
-		Addr:       ":15351",
-		Conns:      2,
-		FlushDelay: time.Millisecond,
+		Addr:  ":15351",
+		Conns: 2,
 	}
 	c.Start()
 	defer c.Stop()
@@ -569,9 +567,8 @@ func TestConcurrentCall(t *testing.T) {
 
 func TestCompress(t *testing.T) {
 	s := &Server{
-		Addr:       ":15352",
-		Handler:    func(clientAddr string, request interface{}) interface{} { return request },
-		FlushDelay: time.Millisecond,
+		Addr:    ":15352",
+		Handler: func(clientAddr string, request interface{}) interface{} { return request },
 	}
 	if err := s.Start(); err != nil {
 		t.Fatalf("Server.Start() failed: [%s]", err)
@@ -581,7 +578,6 @@ func TestCompress(t *testing.T) {
 	c1 := &Client{
 		Addr:               ":15352",
 		Conns:              2,
-		FlushDelay:         time.Millisecond,
 		DisableCompression: true,
 	}
 	c1.Start()
@@ -589,7 +585,6 @@ func TestCompress(t *testing.T) {
 
 	c2 := &Client{
 		Addr:               ":15352",
-		FlushDelay:         2 * time.Millisecond,
 		DisableCompression: false,
 	}
 	c2.Start()

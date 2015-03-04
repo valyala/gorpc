@@ -33,10 +33,6 @@ type Client struct {
 	// Default is 32768.
 	PendingRequests int
 
-	// Delay between request flushes.
-	// Default value is 5ms.
-	FlushDelay time.Duration
-
 	// Maximum request time.
 	// Default value is 30s.
 	RequestTimeout time.Duration
@@ -99,9 +95,6 @@ func (c *Client) Start() {
 
 	if c.PendingRequests <= 0 {
 		c.PendingRequests = 32768
-	}
-	if c.FlushDelay <= 0 {
-		c.FlushDelay = 5 * time.Millisecond
 	}
 	if c.RequestTimeout <= 0 {
 		c.RequestTimeout = 30 * time.Second
@@ -168,19 +161,24 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 		Request: request,
 		Done:    make(chan struct{}),
 	}
-	tc := time.After(timeout)
+	tc := time.NewTimer(timeout)
 	select {
 	case c.requestsChan <- &m:
+	default:
 		select {
-		case <-m.Done:
-			return m.Response, m.Error
-		case <-tc:
-			err := fmt.Errorf("gorpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
+		case c.requestsChan <- &m:
+		case <-tc.C:
+			err := fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
 			logError("%s", err)
 			return nil, err
 		}
-	case <-tc:
-		err := fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
+	}
+	select {
+	case <-m.Done:
+		tc.Stop()
+		return m.Response, m.Error
+	case <-tc.C:
+		err := fmt.Errorf("gorpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
 		logError("%s", err)
 		return nil, err
 	}
@@ -288,8 +286,6 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 	}
 	e := gob.NewEncoder(ww)
 
-	var flushChan <-chan time.Time
-
 	var msgID uint64
 	for {
 		var rpcM *clientMessage
@@ -297,11 +293,12 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 		select {
 		case <-stopChan:
 			return
+		default:
+		}
+
+		select {
 		case rpcM = <-c.requestsChan:
-			if flushChan == nil {
-				flushChan = time.After(c.FlushDelay)
-			}
-		case <-flushChan:
+		default:
 			if !c.DisableCompression {
 				if err := ww.Flush(); err != nil {
 					err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush data to compressed stream: [%s]", c.Addr, err)
@@ -316,8 +313,11 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 				err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush requests to wire: [%s]", c.Addr, err)
 				return
 			}
-			flushChan = nil
-			continue
+			select {
+			case <-stopChan:
+				return
+			case rpcM = <-c.requestsChan:
+			}
 		}
 
 		msgID++
