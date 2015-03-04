@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// Rpc client.
+// Client implements RPC client.
 //
 // The client must be started with Client.Start() before use.
 //
@@ -86,7 +86,7 @@ type Client struct {
 	stopWg         sync.WaitGroup
 }
 
-// Starts rpc client. Establishes connection to the server on Client.Addr.
+// Start starts rpc client. Establishes connection to the server on Client.Addr.
 //
 // All the response types the server may return must be registered
 // via gorpc.RegisterType() before starting the client.
@@ -128,14 +128,15 @@ func (c *Client) Start() {
 	}
 }
 
-// Stops rpc client. Stopped client can be started again.
+// Stop stops rpc client. Stopped client can be started again.
 func (c *Client) Stop() {
 	close(c.clientStopChan)
 	c.stopWg.Wait()
 	c.clientStopChan = nil
 }
 
-// Sends the given request to the server and obtains response from the server.
+// Call sends the given request to the server and obtains response
+// from the server.
 // Returns non-nil error if the response cannot be obtained during
 // Client.RequestTimeout or server connection problems occur.
 //
@@ -150,7 +151,8 @@ func (c *Client) Call(request interface{}) (response interface{}, err error) {
 	return c.CallTimeout(request, c.RequestTimeout)
 }
 
-// Sends the given request to the server and obtains response from the server.
+// CallTimeout sends the given request to the server and obtains response
+// from the server.
 // Returns non-nil error if the response cannot be obtained during
 // the given timeout or server connection problems occur.
 //

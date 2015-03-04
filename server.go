@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Server handler function.
+// HandlerFunc is a server handler function.
 //
 // clientAddr contains client address returned by net.Conn.RemoteAddr().
 // Request and response types may be arbitrary.
@@ -22,9 +22,9 @@ import (
 // float64, etc. or arrays, slices and maps containing base Go types.
 type HandlerFunc func(clientAddr string, request interface{}) (response interface{})
 
-// Custom listener passed to Server.Listener must satisfy this interface.
+// Listener is an interface for custom listeners intended for the Server.
 type Listener interface {
-	// Listener must return incoming connections from clients.
+	// Accept must return incoming connections from clients.
 	// The server passes Server.Addr in addr parameter.
 	// clientAddr must contain client's address in user-readable view.
 	//
@@ -35,14 +35,14 @@ type Listener interface {
 	// streams before returning from Write().
 	Accept(addr string) (conn io.ReadWriteCloser, clientAddr string, err error)
 
-	// Listener must immediately return errors from all pending Accept()
-	// calls if Close() is called.
-	//
+	// Close closes the listener.
+	// All pending calls to Accept() must immediately return errors after
+	// Close is called.
 	// All subsequent calls to Accept() must immediately return error.
 	Close() error
 }
 
-// Rpc server.
+// Server implements RPC server.
 //
 // Default server settings are optimized for high load, so don't override
 // them without valid reason.
@@ -94,7 +94,7 @@ type Server struct {
 	stopWg         sync.WaitGroup
 }
 
-// Starts rpc server.
+// Start starts rpc server.
 //
 // All the request types the client may send to the server must be registered
 // with gorpc.RegisterType() before starting the server.
@@ -138,14 +138,14 @@ func (s *Server) Start() error {
 	return nil
 }
 
-// Stops rpc server. Stopped server can be started again.
+// Stop stops rpc server. Stopped server can be started again.
 func (s *Server) Stop() {
 	close(s.serverStopChan)
 	s.stopWg.Wait()
 	s.serverStopChan = nil
 }
 
-// Starts rpc server and blocks until it is stopped.
+// Serve starts rpc server and blocks until it is stopped.
 func (s *Server) Serve() error {
 	if err := s.Start(); err != nil {
 		return err
