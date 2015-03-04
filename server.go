@@ -32,6 +32,8 @@ type Listener interface {
 	// It is expected that the returned conn immediately
 	// sends all the data passed via Write() to the client.
 	// Otherwise gorpc may hang.
+	// The conn implementation must call Flush() on underlying buffered
+	// streams before returning from Write().
 	Accept(addr string) (conn io.ReadWriteCloser, clientAddr string, err error)
 
 	// Listener must immediately return errors from all pending Accept()
