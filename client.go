@@ -6,7 +6,6 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
-	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -61,6 +60,9 @@ type Client struct {
 	// Override this callback if you want custom underlying transport
 	// for gorpc. For example, UDP-based, encrypted or SOAP-based :)
 	// Don't forget overriding Client.Listener accordingly.
+	//
+	// If you need encrypted transport, then feel free using NewTLSDial()
+	// on the client and NewTLSListener() helpers on the server.
 	//
 	// It is expected that the returned conn immediately
 	// sends all the data passed via Write() to the server.
@@ -181,17 +183,6 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 		return nil, err
 	}
 }
-
-var (
-	dialer = &net.Dialer{
-		Timeout:   10 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}
-
-	defaultDial = func(addr string) (conn io.ReadWriteCloser, err error) {
-		return dialer.Dial("tcp", addr)
-	}
-)
 
 func clientHandler(c *Client) {
 	defer c.stopWg.Done()

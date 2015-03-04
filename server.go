@@ -6,7 +6,6 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
-	"net"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -79,6 +78,9 @@ type Server struct {
 	// for gorpc. For example, UDP-based, encrypted or SOAP-based :)
 	// Don't forget overriding Client.Dial() callback accordingly.
 	//
+	// If you need encrypted transport, then feel free using NewTLSDial()
+	// on the client and NewTLSListener() helpers on the server.
+	//
 	// By default it returns TCP connections accepted from Server.Addr.
 	Listener Listener
 
@@ -122,52 +124,18 @@ func (s *Server) Start() error {
 	}
 
 	if s.Listener == nil {
-		ln, err := net.Listen("tcp", s.Addr)
+		var err error
+		s.Listener, err = newDefaultListener(s.Addr)
 		if err != nil {
 			err := fmt.Errorf("gorpc.Server: [%s]. Cannot listen to: [%s]", s.Addr, err)
 			logError("%s", err)
 			return err
-		}
-		s.Listener = &defaultListener{
-			L: ln,
 		}
 	}
 
 	s.stopWg.Add(1)
 	go serverHandler(s)
 	return nil
-}
-
-type defaultListener struct {
-	L net.Listener
-}
-
-func (ln *defaultListener) Accept(addr string) (conn io.ReadWriteCloser, clientAddr string, err error) {
-	c, err := ln.L.Accept()
-	if err != nil {
-		return nil, "", err
-	}
-	if err = setupKeepalive(c); err != nil {
-		logError("gorpc.Server: [%s]->[%s]. Cannot setup keepalive: [%s]", c.RemoteAddr(), addr, err)
-		c.Close()
-		return nil, "", err
-	}
-	return c, c.RemoteAddr().String(), nil
-}
-
-func setupKeepalive(conn net.Conn) error {
-	tcpConn := conn.(*net.TCPConn)
-	if err := tcpConn.SetKeepAlive(true); err != nil {
-		return err
-	}
-	if err := tcpConn.SetKeepAlivePeriod(30 * time.Second); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (ln *defaultListener) Close() error {
-	return ln.L.Close()
 }
 
 // Stops rpc server. Stopped server can be started again.

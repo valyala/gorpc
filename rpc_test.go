@@ -1,6 +1,7 @@
 package gorpc
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"sync"
@@ -298,6 +299,54 @@ func TestCustomTransport(t *testing.T) {
 				w: wc,
 			}, nil
 		},
+	}
+	c.Start()
+	defer c.Stop()
+
+	for i := 0; i < 10; i++ {
+		resp, err := c.Call(i)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		x, ok := resp.(int)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected int", resp)
+		}
+		if x != i {
+			t.Fatalf("Unexpected value returned: %d. Expected %d", x, i)
+		}
+	}
+}
+
+func TestTLS(t *testing.T) {
+	certFile := "./ssl-cert-snakeoil.pem"
+	keyFile := "./ssl-cert-snakeoil.key"
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		t.Fatalf("Cannot load TLS certificates: [%s]", err)
+	}
+	cfg := &tls.Config{
+		Certificates:       []tls.Certificate{cert},
+		InsecureSkipVerify: true,
+	}
+
+	ln, err := NewTLSListener(":12345", cfg)
+	if err != nil {
+		t.Fatalf("Cannot create tls listener: [%s]", err)
+	}
+
+	s := &Server{
+		Listener: ln,
+		Handler:  func(clientAddr string, request interface{}) interface{} { return request },
+	}
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := &Client{
+		Addr: ":12345",
+		Dial: NewTLSDial(cfg),
 	}
 	c.Start()
 	defer c.Stop()
