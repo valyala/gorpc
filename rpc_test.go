@@ -260,7 +260,7 @@ func newCustomListener(remoteAddr string, r io.ReadCloser, w io.WriteCloser) *cu
 func (ln *customListener) Accept(addr string) (conn io.ReadWriteCloser, clientAddr string, err error) {
 	_, ok := <-ln.ch
 	if !ok {
-		return nil, "", fmt.Errorf("Listener is closed")
+		return nil, "", fmt.Errorf("listener is closed")
 	}
 	return &customConn{
 		r: ln.r,

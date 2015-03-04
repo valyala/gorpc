@@ -59,7 +59,7 @@ func setupKeepalive(conn net.Conn) error {
 	return nil
 }
 
-// Creates Dial() function for TLS connections' establishing.
+// NewTLSDial creates Dial() function for TLS connections' establishing.
 // The returned function is intended for Client.Dial assignment.
 func NewTLSDial(cfg *tls.Config) func(addr string) (conn io.ReadWriteCloser, err error) {
 	return func(addr string) (conn io.ReadWriteCloser, err error) {
@@ -75,7 +75,8 @@ type tlsListener struct {
 	L net.Listener
 }
 
-// Creates a TLS listener accepting connections on the given TCP addr.
+// NewTLSListener creates a TLS listener accepting connections on
+// the given TCP addr.
 // The returned listener is intended for Server.Listener assignment.
 func NewTLSListener(addr string, cfg *tls.Config) (Listener, error) {
 	ln, err := tls.Listen("tcp", addr, cfg)

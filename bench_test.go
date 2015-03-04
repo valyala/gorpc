@@ -7,123 +7,123 @@ import (
 	"testing"
 )
 
-func Benchmark_EchoInt_1_Worker(b *testing.B) {
+func BenchmarkEchoInt1Worker(b *testing.B) {
 	benchEchoInt(b, 1, false)
 }
 
-func Benchmark_EchoInt_10_Workers(b *testing.B) {
+func BenchmarkEchoInt10Workers(b *testing.B) {
 	benchEchoInt(b, 10, false)
 }
 
-func Benchmark_EchoInt_100_Workers(b *testing.B) {
+func BenchmarkEchoInt100Workers(b *testing.B) {
 	benchEchoInt(b, 100, false)
 }
 
-func Benchmark_EchoInt_1000_Workers(b *testing.B) {
+func BenchmarkEchoInt1000Workers(b *testing.B) {
 	benchEchoInt(b, 1000, false)
 }
 
-func Benchmark_EchoInt_10000_Workers(b *testing.B) {
+func BenchmarkEchoInt10000Workers(b *testing.B) {
 	benchEchoInt(b, 10000, false)
 }
 
-func Benchmark_EchoInt_Nocompress_1_Worker(b *testing.B) {
+func BenchmarkEchoIntNocompress1Worker(b *testing.B) {
 	benchEchoInt(b, 1, true)
 }
 
-func Benchmark_EchoInt_Nocompress_10_Workers(b *testing.B) {
+func BenchmarkEchoIntNocompress10Workers(b *testing.B) {
 	benchEchoInt(b, 10, true)
 }
 
-func Benchmark_EchoInt_Nocompress_100_Workers(b *testing.B) {
+func BenchmarkEchoIntNocompress100Workers(b *testing.B) {
 	benchEchoInt(b, 100, true)
 }
 
-func Benchmark_EchoInt_Nocompress_1000_Workers(b *testing.B) {
+func BenchmarkEchoIntNocompress1000Workers(b *testing.B) {
 	benchEchoInt(b, 1000, true)
 }
 
-func Benchmark_EchoInt_Nocompress_10000_Workers(b *testing.B) {
+func BenchmarkEchoIntNocompress10000Workers(b *testing.B) {
 	benchEchoInt(b, 10000, true)
 }
 
-func Benchmark_EchoString_1_Worker(b *testing.B) {
+func BenchmarkEchoString1Worker(b *testing.B) {
 	benchEchoString(b, 1, false)
 }
 
-func Benchmark_EchoString_10_Workers(b *testing.B) {
+func BenchmarkEchoString10Workers(b *testing.B) {
 	benchEchoString(b, 10, false)
 }
 
-func Benchmark_EchoString_100_Workers(b *testing.B) {
+func BenchmarkEchoString100Workers(b *testing.B) {
 	benchEchoString(b, 100, false)
 }
 
-func Benchmark_EchoString_1000_Workers(b *testing.B) {
+func BenchmarkEchoString1000Workers(b *testing.B) {
 	benchEchoString(b, 1000, false)
 }
 
-func Benchmark_EchoString_10000_Workers(b *testing.B) {
+func BenchmarkEchoString10000Workers(b *testing.B) {
 	benchEchoString(b, 10000, false)
 }
 
-func Benchmark_EchoString_Nocompress_1_Worker(b *testing.B) {
+func BenchmarkEchoStringNocompress1Worker(b *testing.B) {
 	benchEchoString(b, 1, true)
 }
 
-func Benchmark_EchoString_Nocompress_10_Workers(b *testing.B) {
+func BenchmarkEchoStringNocompress10Workers(b *testing.B) {
 	benchEchoString(b, 10, true)
 }
 
-func Benchmark_EchoString_Nocompress_100_Workers(b *testing.B) {
+func BenchmarkEchoStringNocompress100Workers(b *testing.B) {
 	benchEchoString(b, 100, true)
 }
 
-func Benchmark_EchoString_Nocompress_1000_Workers(b *testing.B) {
+func BenchmarkEchoStringNocompress1000Workers(b *testing.B) {
 	benchEchoString(b, 1000, true)
 }
 
-func Benchmark_EchoString_Nocompress_10000_Workers(b *testing.B) {
+func BenchmarkEchoStringNocompress10000Workers(b *testing.B) {
 	benchEchoString(b, 10000, true)
 }
 
-func Benchmark_EchoStruct_1_Worker(b *testing.B) {
+func BenchmarkEchoStruct1Worker(b *testing.B) {
 	benchEchoStruct(b, 1, false)
 }
 
-func Benchmark_EchoStruct_10_Workers(b *testing.B) {
+func BenchmarkEchoStruct10Workers(b *testing.B) {
 	benchEchoStruct(b, 10, false)
 }
 
-func Benchmark_EchoStruct_100_Workers(b *testing.B) {
+func BenchmarkEchoStruct100Workers(b *testing.B) {
 	benchEchoStruct(b, 100, false)
 }
 
-func Benchmark_EchoStruct_1000_Workers(b *testing.B) {
+func BenchmarkEchoStruct1000Workers(b *testing.B) {
 	benchEchoStruct(b, 1000, false)
 }
 
-func Benchmark_EchoStruct_10000_Workers(b *testing.B) {
+func BenchmarkEchoStruct10000Workers(b *testing.B) {
 	benchEchoStruct(b, 10000, false)
 }
 
-func Benchmark_EchoStruct_Nocompress_1_Worker(b *testing.B) {
+func BenchmarkEchoStructNocompress1Worker(b *testing.B) {
 	benchEchoStruct(b, 1, true)
 }
 
-func Benchmark_EchoStruct_Nocompress_10_Workers(b *testing.B) {
+func BenchmarkEchoStructNocompress10Workers(b *testing.B) {
 	benchEchoStruct(b, 10, true)
 }
 
-func Benchmark_EchoStruct_Nocompress_100_Workers(b *testing.B) {
+func BenchmarkEchoStructNocompress100Workers(b *testing.B) {
 	benchEchoStruct(b, 100, true)
 }
 
-func Benchmark_EchoStruct_Nocompress_1000_Workers(b *testing.B) {
+func BenchmarkEchoStructNocompress1000Workers(b *testing.B) {
 	benchEchoStruct(b, 1000, true)
 }
 
-func Benchmark_EchoStruct_Nocompress_10000_Workers(b *testing.B) {
+func BenchmarkEchoStructNocompress10000Workers(b *testing.B) {
 	benchEchoStruct(b, 10000, true)
 }
 

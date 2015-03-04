@@ -7,19 +7,19 @@ import (
 	"sync/atomic"
 )
 
-// Error logging function to pass to gorpc.SetErrorLogger().
+// LoggerFunc is an error logging function to pass to gorpc.SetErrorLogger().
 type LoggerFunc func(format string, args ...interface{})
 
 var errorLogger = LoggerFunc(log.Printf)
 
-// Use the given error logger in gorpc.
+// SetErrorLogger sets the given error logger to use in gorpc.
 //
 // By default log.Printf is used for error logging.
 func SetErrorLogger(f LoggerFunc) {
 	errorLogger = f
 }
 
-// Registers the given type to send via rpc.
+// RegisterType registers the given type to send via rpc.
 //
 // The client must register all the response types the server may send.
 // The server must register all the request types the client may send.
@@ -39,7 +39,8 @@ func logError(format string, args ...interface{}) {
 	errorLogger(format, args...)
 }
 
-// Connection statistics. Applied to both gorpc.Client and gorpc.Server.
+// ConnStats provides connection statistics. Applied to both gorpc.Client
+// and gorpc.Server.
 type ConnStats struct {
 	// The number of bytes written to the underlying connections.
 	BytesWritten uint64
