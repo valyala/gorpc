@@ -374,9 +374,8 @@ func TestConcurrentCall(t *testing.T) {
 	defer s.Stop()
 
 	c := &Client{
-		Addr:       ":15351",
-		Conns:      2,
-		FlushDelay: time.Millisecond,
+		Addr:  ":15351",
+		Conns: 2,
 	}
 	c.Start()
 	defer c.Stop()
@@ -412,7 +411,6 @@ func TestCompress(t *testing.T) {
 	c1 := &Client{
 		Addr:               ":15352",
 		Conns:              2,
-		FlushDelay:         time.Millisecond,
 		DisableCompression: true,
 	}
 	c1.Start()
@@ -420,7 +418,6 @@ func TestCompress(t *testing.T) {
 
 	c2 := &Client{
 		Addr:               ":15352",
-		FlushDelay:         2 * time.Millisecond,
 		DisableCompression: false,
 	}
 	c2.Start()

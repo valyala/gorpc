@@ -34,10 +34,6 @@ type Client struct {
 	// Default is 32768.
 	PendingRequests int
 
-	// Delay between request flushes.
-	// Default value is 5ms.
-	FlushDelay time.Duration
-
 	// Maximum request time.
 	// Default value is 30s.
 	RequestTimeout time.Duration
@@ -79,9 +75,6 @@ func (c *Client) Start() {
 
 	if c.PendingRequests <= 0 {
 		c.PendingRequests = 32768
-	}
-	if c.FlushDelay <= 0 {
-		c.FlushDelay = 5 * time.Millisecond
 	}
 	if c.RequestTimeout <= 0 {
 		c.RequestTimeout = 30 * time.Second
@@ -273,8 +266,6 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 	}
 	e := gob.NewEncoder(ww)
 
-	var flushChan <-chan time.Time
-
 	var msgID uint64
 	for {
 		var rpcM *clientMessage
@@ -282,11 +273,12 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 		select {
 		case <-stopChan:
 			return
+		default:
+		}
+
+		select {
 		case rpcM = <-c.requestsChan:
-			if flushChan == nil {
-				flushChan = time.After(c.FlushDelay)
-			}
-		case <-flushChan:
+		default:
 			if !c.DisableCompression {
 				if err := ww.Flush(); err != nil {
 					err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush data to compressed stream: [%s]", c.Addr, err)
@@ -301,8 +293,11 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 				err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush requests to wire: [%s]", c.Addr, err)
 				return
 			}
-			flushChan = nil
-			continue
+			select {
+			case <-stopChan:
+				return
+			case rpcM = <-c.requestsChan:
+			}
 		}
 
 		msgID++
