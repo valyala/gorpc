@@ -55,7 +55,7 @@ type Client struct {
 
 	// The client calls this callback when it needs new connection
 	// to the server.
-	// The client passed Client.Addr into Dial().
+	// The client passes Client.Addr into Dial().
 	//
 	// Override this callback if you want custom underlying transport
 	// for gorpc. For example, UDP-based, encrypted or SOAP-based :)
