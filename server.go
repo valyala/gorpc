@@ -145,6 +145,7 @@ func serverHandler(s *Server, ln net.Listener) {
 		}
 
 		if err != nil {
+			atomic.AddUint64(&s.Stats.AcceptErrors, 1)
 			continue
 		}
 		if err = setupKeepalive(conn); err != nil {
@@ -232,12 +233,7 @@ type serverMessage struct {
 func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
 	defer func() { close(done) }()
 
-	r = &readerCounter{
-		R:         r,
-		BytesRead: &s.Stats.BytesRead,
-		ReadCalls: &s.Stats.ReadCalls,
-	}
-
+	r = newReaderCounter(r, &s.Stats)
 	br := bufio.NewReaderSize(r, s.RecvBufferSize)
 
 	rr := br
@@ -285,12 +281,7 @@ func serveRequest(s *Server, responsesChan chan<- *serverMessage, stopChan <-cha
 func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-chan *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
 	defer func() { close(done) }()
 
-	w = &writerCounter{
-		W:            w,
-		BytesWritten: &s.Stats.BytesWritten,
-		WriteCalls:   &s.Stats.WriteCalls,
-	}
-
+	w = newWriterCounter(w, &s.Stats)
 	bw := bufio.NewWriterSize(w, s.SendBufferSize)
 
 	ww := bw

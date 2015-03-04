@@ -50,38 +50,76 @@ type ConnStats struct {
 	// The number of Read() calls.
 	ReadCalls uint64
 
+	// The number of Read() errors.
+	ReadErrors uint64
+
 	// The number of Write() calls.
 	WriteCalls uint64
+
+	// The number of Write() errors.
+	WriteErrors uint64
 
 	// The number of Dial() calls.
 	DialCalls uint64
 
+	// The number of Dial() errors.
+	DialErrors uint64
+
 	// The number of Accept() calls.
 	AcceptCalls uint64
+
+	// The number of Accept() errors.
+	AcceptErrors uint64
 }
 
 type writerCounter struct {
-	W            io.Writer
-	BytesWritten *uint64
-	WriteCalls   *uint64
-}
-
-func (w *writerCounter) Write(p []byte) (int, error) {
-	n, err := w.W.Write(p)
-	atomic.AddUint64(w.WriteCalls, 1)
-	atomic.AddUint64(w.BytesWritten, uint64(n))
-	return n, err
+	w            io.Writer
+	bytesWritten *uint64
+	writeCalls   *uint64
+	writeErrors  *uint64
 }
 
 type readerCounter struct {
-	R         io.Reader
-	BytesRead *uint64
-	ReadCalls *uint64
+	r          io.Reader
+	bytesRead  *uint64
+	readCalls  *uint64
+	readErrors *uint64
+}
+
+func newWriterCounter(w io.Writer, s *ConnStats) io.Writer {
+	return &writerCounter{
+		w:            w,
+		bytesWritten: &s.BytesWritten,
+		writeCalls:   &s.WriteCalls,
+		writeErrors:  &s.WriteErrors,
+	}
+}
+
+func newReaderCounter(r io.Reader, s *ConnStats) io.Reader {
+	return &readerCounter{
+		r:          r,
+		bytesRead:  &s.BytesRead,
+		readCalls:  &s.ReadCalls,
+		readErrors: &s.ReadErrors,
+	}
+}
+
+func (w *writerCounter) Write(p []byte) (int, error) {
+	n, err := w.w.Write(p)
+	atomic.AddUint64(w.writeCalls, 1)
+	if err != nil {
+		atomic.AddUint64(w.writeErrors, 1)
+	}
+	atomic.AddUint64(w.bytesWritten, uint64(n))
+	return n, err
 }
 
 func (r *readerCounter) Read(p []byte) (int, error) {
-	n, err := r.R.Read(p)
-	atomic.AddUint64(r.ReadCalls, 1)
-	atomic.AddUint64(r.BytesRead, uint64(n))
+	n, err := r.r.Read(p)
+	atomic.AddUint64(r.readCalls, 1)
+	if err != nil {
+		atomic.AddUint64(r.readErrors, 1)
+	}
+	atomic.AddUint64(r.bytesRead, uint64(n))
 	return n, err
 }

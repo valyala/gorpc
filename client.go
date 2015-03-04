@@ -190,6 +190,7 @@ func clientHandler(c *Client) {
 		}
 
 		if err != nil {
+			atomic.AddUint64(&c.Stats.DialErrors, 1)
 			continue
 		}
 		clientHandleConnection(c, conn)
@@ -255,13 +256,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 	var err error
 	defer func() { done <- err }()
 
-	w = &writerCounter{
-		W:            w,
-		BytesWritten: &c.Stats.BytesWritten,
-		WriteCalls:   &c.Stats.WriteCalls,
-	}
-
-	var msgID uint64
+	w = newWriterCounter(w, &c.Stats)
 	bw := bufio.NewWriterSize(w, c.SendBufferSize)
 
 	ww := bw
@@ -275,6 +270,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 
 	var flushChan <-chan time.Time
 
+	var msgID uint64
 	for {
 		var rpcM *clientMessage
 
@@ -330,12 +326,7 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 	var err error
 	defer func() { done <- err }()
 
-	r = &readerCounter{
-		R:         r,
-		BytesRead: &c.Stats.BytesRead,
-		ReadCalls: &c.Stats.ReadCalls,
-	}
-
+	r = newReaderCounter(r, &c.Stats)
 	br := bufio.NewReaderSize(r, c.RecvBufferSize)
 
 	rr := br

@@ -64,7 +64,7 @@ if resp.(string) != "foobar" {
 ```
 
 Both client and server collect connection stats - the number of bytes
-read / written and the number of calls to send(), recv(), connect()
+read / written and the number of calls / errors to send(), recv(), connect()
 and accept(). This stats is available at Client.Stats and Server.Stats.
 
 See tests for more usage examples.
