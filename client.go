@@ -59,7 +59,7 @@ type Client struct {
 	//
 	// Override this callback if you want custom underlying transport
 	// for gorpc. For example, UDP-based, encrypted or SOAP-based :)
-	// Don't forget overriding Client.Listener accordingly.
+	// Don't forget overriding Server.Listener accordingly.
 	//
 	// If you need encrypted transport, then feel free using NewTLSDial()
 	// on the client and NewTLSListener() helpers on the server.
