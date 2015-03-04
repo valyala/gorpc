@@ -19,7 +19,7 @@ const (
 	DefaultFlushDelay = 5 * time.Millisecond
 
 	// Default size for Client and Server buffers (both write and read)
-	DefaultBufferSize = 1024 * 1024
+	DefaultBufferSize = 64 * 1024
 )
 
 // LoggerFunc is an error logging function to pass to gorpc.SetErrorLogger().
