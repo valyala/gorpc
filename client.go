@@ -168,18 +168,17 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 		Request: request,
 		Done:    make(chan struct{}),
 	}
-	tc := time.After(timeout)
 	select {
 	case c.requestsChan <- &m:
 		select {
 		case <-m.Done:
 			return m.Response, m.Error
-		case <-tc:
+		case <-time.After(timeout):
 			err := fmt.Errorf("gorpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
 			logError("%s", err)
 			return nil, err
 		}
-	case <-tc:
+	default:
 		err := fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
 		logError("%s", err)
 		return nil, err
