@@ -54,6 +54,22 @@ type Client struct {
 	// Default value is 1M.
 	RecvBufferSize int
 
+	// The client calls this callback when it needs new connection
+	// to the server.
+	// The client passed Client.Addr into Dial().
+	//
+	// Override this callback if you want custom underlying transport
+	// for gorpc. For example, UDP-based, encrypted or SOAP-based :)
+	// Don't forget overriding Client.Listener accordingly.
+	//
+	// It is expected that the returned conn immediately
+	// sends all the data passed via Write() to the server.
+	// Otherwise gorpc may hang.
+	//
+	// By default it returns TCP connections established
+	// to the Client.Addr.
+	Dial func(addr string) (conn io.ReadWriteCloser, err error)
+
 	// Connection statistics.
 	//
 	// The stats doesn't reset automatically. Feel free resetting it
@@ -98,6 +114,9 @@ func (c *Client) Start() {
 
 	if c.Conns <= 0 {
 		c.Conns = 1
+	}
+	if c.Dial == nil {
+		c.Dial = defaultDial
 	}
 	for i := 0; i < c.Conns; i++ {
 		c.stopWg.Add(1)
@@ -161,21 +180,27 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 	}
 }
 
-var dialer = &net.Dialer{
-	Timeout:   10 * time.Second,
-	KeepAlive: 30 * time.Second,
-}
+var (
+	dialer = &net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
+	defaultDial = func(addr string) (conn io.ReadWriteCloser, err error) {
+		return dialer.Dial("tcp", addr)
+	}
+)
 
 func clientHandler(c *Client) {
 	defer c.stopWg.Done()
 
-	var conn net.Conn
+	var conn io.ReadWriteCloser
 	var err error
 
 	for {
 		dialChan := make(chan struct{})
 		go func() {
-			if conn, err = dialer.Dial("tcp", c.Addr); err != nil {
+			if conn, err = c.Dial(c.Addr); err != nil {
 				logError("gorpc.Client: [%s]. Cannot establish rpc connection: [%s]", c.Addr, err)
 				time.Sleep(time.Second)
 			}
@@ -197,7 +222,7 @@ func clientHandler(c *Client) {
 	}
 }
 
-func clientHandleConnection(c *Client, conn net.Conn) {
+func clientHandleConnection(c *Client, conn io.ReadWriteCloser) {
 	var buf [1]byte
 	if !c.DisableCompression {
 		buf[0] = 1

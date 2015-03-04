@@ -15,13 +15,31 @@ import (
 
 // Server handler function.
 //
-// clientAddr contains client address returned by net.TCPConn.RemoteAddr().
+// clientAddr contains client address returned by net.Conn.RemoteAddr().
 // Request and response types may be arbitrary.
 // All the request types the client may send to the server must be registered
 // with gorpc.RegisterType() before starting the server.
 // There is no need in registering base Go types such as int, string, bool,
 // float64, etc. or arrays, slices and maps containing base Go types.
 type HandlerFunc func(clientAddr string, request interface{}) (response interface{})
+
+// Custom listener passed to Server.Listener must satisfy this interface.
+type Listener interface {
+	// Listener must return incoming connections from clients.
+	// The server passes Server.Addr in addr parameter.
+	// clientAddr must contain client's address in user-readable view.
+	//
+	// It is expected that the returned conn immediately
+	// sends all the data passed via Write() to the client.
+	// Otherwise gorpc may hang.
+	Accept(addr string) (conn io.ReadWriteCloser, clientAddr string, err error)
+
+	// Listener must immediately return errors from all pending Accept()
+	// calls if Close() is called.
+	//
+	// All subsequent calls to Accept() must immediately return error.
+	Close() error
+}
 
 // Rpc server.
 //
@@ -52,6 +70,15 @@ type Server struct {
 	// Size of recv buffer per each TCP connection in bytes.
 	// Default is 1M.
 	RecvBufferSize int
+
+	// The server obtains new client connections via Listener.Accept().
+	//
+	// Override the listener if you want custom underlying transport
+	// for gorpc. For example, UDP-based, encrypted or SOAP-based :)
+	// Don't forget overriding Client.Dial() callback accordingly.
+	//
+	// By default it returns TCP connections accepted from Server.Addr.
+	Listener Listener
 
 	// Connection statistics.
 	//
@@ -92,16 +119,53 @@ func (s *Server) Start() error {
 		s.RecvBufferSize = 1024 * 1024
 	}
 
-	ln, err := net.Listen("tcp", s.Addr)
-	if err != nil {
-		err := fmt.Errorf("gorpc.Server: [%s]. Cannot listen to: [%s]", s.Addr, err)
-		logError("%s", err)
-		return err
+	if s.Listener == nil {
+		ln, err := net.Listen("tcp", s.Addr)
+		if err != nil {
+			err := fmt.Errorf("gorpc.Server: [%s]. Cannot listen to: [%s]", s.Addr, err)
+			logError("%s", err)
+			return err
+		}
+		s.Listener = &defaultListener{
+			L: ln,
+		}
 	}
 
 	s.stopWg.Add(1)
-	go serverHandler(s, ln)
+	go serverHandler(s)
 	return nil
+}
+
+type defaultListener struct {
+	L net.Listener
+}
+
+func (ln *defaultListener) Accept(addr string) (conn io.ReadWriteCloser, clientAddr string, err error) {
+	c, err := ln.L.Accept()
+	if err != nil {
+		return nil, "", err
+	}
+	if err = setupKeepalive(c); err != nil {
+		logError("gorpc.Server: [%s]->[%s]. Cannot setup keepalive: [%s]", c.RemoteAddr(), addr, err)
+		c.Close()
+		return nil, "", err
+	}
+	return c, c.RemoteAddr().String(), nil
+}
+
+func setupKeepalive(conn net.Conn) error {
+	tcpConn := conn.(*net.TCPConn)
+	if err := tcpConn.SetKeepAlive(true); err != nil {
+		return err
+	}
+	if err := tcpConn.SetKeepAlivePeriod(30 * time.Second); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (ln *defaultListener) Close() error {
+	return ln.L.Close()
 }
 
 // Stops rpc server. Stopped server can be started again.
@@ -120,16 +184,17 @@ func (s *Server) Serve() error {
 	return nil
 }
 
-func serverHandler(s *Server, ln net.Listener) {
+func serverHandler(s *Server) {
 	defer s.stopWg.Done()
 
-	var conn net.Conn
+	var conn io.ReadWriteCloser
+	var clientAddr string
 	var err error
 
 	for {
 		acceptChan := make(chan struct{})
 		go func() {
-			if conn, err = ln.Accept(); err != nil {
+			if conn, clientAddr, err = s.Listener.Accept(s.Addr); err != nil {
 				logError("gorpc.Server: [%s]. Cannot accept new connection: [%s]", s.Addr, err)
 				time.Sleep(time.Second)
 			}
@@ -138,7 +203,7 @@ func serverHandler(s *Server, ln net.Listener) {
 
 		select {
 		case <-s.serverStopChan:
-			ln.Close()
+			s.Listener.Close()
 			return
 		case <-acceptChan:
 			atomic.AddUint64(&s.Stats.AcceptCalls, 1)
@@ -148,27 +213,13 @@ func serverHandler(s *Server, ln net.Listener) {
 			atomic.AddUint64(&s.Stats.AcceptErrors, 1)
 			continue
 		}
-		if err = setupKeepalive(conn); err != nil {
-			logError("gorpc.Server: [%s]. Cannot setup keepalive: [%s]", s.Addr, err)
-		}
 
 		s.stopWg.Add(1)
-		go serverHandleConnection(s, conn)
+		go serverHandleConnection(s, conn, clientAddr)
 	}
 }
 
-func setupKeepalive(conn net.Conn) error {
-	tcpConn := conn.(*net.TCPConn)
-	if err := tcpConn.SetKeepAlive(true); err != nil {
-		return err
-	}
-	if err := tcpConn.SetKeepAlivePeriod(30 * time.Second); err != nil {
-		return err
-	}
-	return nil
-}
-
-func serverHandleConnection(s *Server, conn net.Conn) {
+func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr string) {
 	defer s.stopWg.Done()
 
 	var enabledCompression bool
@@ -200,7 +251,6 @@ func serverHandleConnection(s *Server, conn net.Conn) {
 	stopChan := make(chan struct{})
 
 	readerDone := make(chan struct{})
-	clientAddr := conn.RemoteAddr().String()
 	go serverReader(s, conn, clientAddr, responsesChan, stopChan, readerDone, enabledCompression)
 
 	writerDone := make(chan struct{})

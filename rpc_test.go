@@ -2,6 +2,7 @@ package gorpc
 
 import (
 	"fmt"
+	"io"
 	"sync"
 	"testing"
 	"time"
@@ -47,7 +48,9 @@ func TestClientStartStop(t *testing.T) {
 		Addr:    ":15346",
 		Handler: echoHandler,
 	}
-	s.Start()
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
 	defer s.Stop()
 
 	c := &Client{
@@ -69,7 +72,9 @@ func TestRequestTimeout(t *testing.T) {
 			return request
 		},
 	}
-	s.Start()
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
 	defer s.Stop()
 
 	c := &Client{
@@ -98,7 +103,9 @@ func TestCallTimeout(t *testing.T) {
 			return request
 		},
 	}
-	s.Start()
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
 	defer s.Stop()
 
 	c := &Client{
@@ -142,7 +149,9 @@ func TestServerPanic(t *testing.T) {
 			panic("server panic")
 		},
 	}
-	s.Start()
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
 	defer s.Stop()
 
 	c := &Client{
@@ -168,7 +177,9 @@ func TestServerStuck(t *testing.T) {
 			return "aaa"
 		},
 	}
-	s.Start()
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
 	defer s.Stop()
 
 	c := &Client{
@@ -209,12 +220,111 @@ func TestServerStuck(t *testing.T) {
 	}
 }
 
+type customConn struct {
+	r io.ReadCloser
+	w io.WriteCloser
+}
+
+func (c *customConn) Read(p []byte) (int, error) {
+	return c.r.Read(p)
+}
+
+func (c *customConn) Write(p []byte) (int, error) {
+	return c.w.Write(p)
+}
+
+func (c *customConn) Close() error {
+	c.r.Close()
+	return c.w.Close()
+}
+
+type customListener struct {
+	remoteAddr string
+	r          io.ReadCloser
+	w          io.WriteCloser
+	ch         chan struct{}
+}
+
+func newCustomListener(remoteAddr string, r io.ReadCloser, w io.WriteCloser) *customListener {
+	ch := make(chan struct{}, 1)
+	ch <- struct{}{}
+	return &customListener{
+		remoteAddr: remoteAddr,
+		r:          r,
+		w:          w,
+		ch:         ch,
+	}
+}
+
+func (ln *customListener) Accept(addr string) (conn io.ReadWriteCloser, clientAddr string, err error) {
+	_, ok := <-ln.ch
+	if !ok {
+		return nil, "", fmt.Errorf("Listener is closed")
+	}
+	return &customConn{
+		r: ln.r,
+		w: ln.w,
+	}, ln.remoteAddr, nil
+}
+
+func (ln *customListener) Close() error {
+	close(ln.ch)
+	return nil
+}
+
+func TestCustomTransport(t *testing.T) {
+	rc, ws := io.Pipe()
+	rs, wc := io.Pipe()
+
+	s := &Server{
+		Listener: newCustomListener("foobar", rs, ws),
+		Handler: func(clientAddr string, request interface{}) interface{} {
+			if clientAddr != "foobar" {
+				t.Fatalf("Unexpected client address: [%s]. Expected [foobar]", clientAddr)
+			}
+			return request
+		},
+	}
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := &Client{
+		Conns: 1,
+		Dial: func(addr string) (conn io.ReadWriteCloser, err error) {
+			return &customConn{
+				r: rc,
+				w: wc,
+			}, nil
+		},
+	}
+	c.Start()
+	defer c.Stop()
+
+	for i := 0; i < 10; i++ {
+		resp, err := c.Call(i)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		x, ok := resp.(int)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected int", resp)
+		}
+		if x != i {
+			t.Fatalf("Unexpected value returned: %d. Expected %d", x, i)
+		}
+	}
+}
+
 func TestIntHandler(t *testing.T) {
 	s := &Server{
 		Addr:    ":15347",
 		Handler: func(clientAddr string, request interface{}) interface{} { return request.(int) + 234 },
 	}
-	s.Start()
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
 	defer s.Stop()
 
 	c := &Client{
@@ -243,7 +353,9 @@ func TestStringHandler(t *testing.T) {
 		Addr:    ":15348",
 		Handler: func(clientAddr string, request interface{}) interface{} { return request.(string) + " world" },
 	}
-	s.Start()
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
 	defer s.Stop()
 
 	c := &Client{
@@ -279,7 +391,9 @@ func TestStructHandler(t *testing.T) {
 		Addr:    ":15349",
 		Handler: func(clientAddr string, request interface{}) interface{} { return request.(*S) },
 	}
-	s.Start()
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
 	defer s.Stop()
 
 	c := &Client{
@@ -318,7 +432,9 @@ func TestEchoHandler(t *testing.T) {
 		Addr:    ":15350",
 		Handler: func(clientAddr string, request interface{}) interface{} { return request },
 	}
-	s.Start()
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
 	defer s.Stop()
 
 	c := &Client{
@@ -370,7 +486,9 @@ func TestConcurrentCall(t *testing.T) {
 		Handler:    func(clientAddr string, request interface{}) interface{} { return request },
 		FlushDelay: time.Millisecond,
 	}
-	s.Start()
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
 	defer s.Stop()
 
 	c := &Client{
@@ -406,7 +524,9 @@ func TestCompress(t *testing.T) {
 		Handler:    func(clientAddr string, request interface{}) interface{} { return request },
 		FlushDelay: time.Millisecond,
 	}
-	s.Start()
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
 	defer s.Stop()
 
 	c1 := &Client{

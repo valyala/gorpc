@@ -22,6 +22,10 @@ TCP connections in TIME_WAIT and CLOSE_WAIT states, the number of network
 packets and the amount of network bandwidth) required for RPC processing under
 high load.
 
+By default TCP connections are used as underlying gorpc transport. But you can
+use anything you want as an underlying transport - just provide custom
+implementations for Client.Dial and Server.Listener.
+
 Currently gorpc with default settings is successfully used in highly loaded
 production environment serving up to 40K qps. Switching from http-based rpc
 to gorpc reduced required network bandwidth from 300 Mbit/s to 24 Mbit/s.
