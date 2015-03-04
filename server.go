@@ -41,10 +41,6 @@ type Server struct {
 	// Default is 32768.
 	PendingResponses int
 
-	// The maximum delay between response flushes to clients.
-	// Default is 5ms.
-	FlushDelay time.Duration
-
 	// Size of send buffer per each TCP connection in bytes.
 	// Default is 1M.
 	SendBufferSize int
@@ -81,9 +77,6 @@ func (s *Server) Start() error {
 
 	if s.PendingResponses <= 0 {
 		s.PendingResponses = 32768
-	}
-	if s.FlushDelay <= 0 {
-		s.FlushDelay = 5 * time.Millisecond
 	}
 	if s.SendBufferSize <= 0 {
 		s.SendBufferSize = 1024 * 1024
@@ -293,19 +286,18 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 	}
 	e := gob.NewEncoder(ww)
 
-	var flushChan <-chan time.Time
-
 	for {
 		var rpcM *serverMessage
 
 		select {
 		case <-stopChan:
 			return
+		default:
+		}
+
+		select {
 		case rpcM = <-responsesChan:
-			if flushChan == nil {
-				flushChan = time.After(s.FlushDelay)
-			}
-		case <-flushChan:
+		default:
 			if enabledCompression {
 				if err := ww.Flush(); err != nil {
 					logError("gorpc.Server: [%s]->[%s]. Cannot flush data to compressed stream: [%s]", clientAddr, s.Addr, err)
@@ -320,8 +312,11 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 				logError("gorpc.Server: [%s]->[%s]. Cannot flush responses to wire: [%s]", clientAddr, s.Addr, err)
 				return
 			}
-			flushChan = nil
-			continue
+			select {
+			case <-stopChan:
+				return
+			case rpcM = <-responsesChan:
+			}
 		}
 
 		m := wireMessage{

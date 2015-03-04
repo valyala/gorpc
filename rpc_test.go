@@ -366,9 +366,8 @@ func TestEchoHandler(t *testing.T) {
 
 func TestConcurrentCall(t *testing.T) {
 	s := &Server{
-		Addr:       ":15351",
-		Handler:    func(clientAddr string, request interface{}) interface{} { return request },
-		FlushDelay: time.Millisecond,
+		Addr:    ":15351",
+		Handler: func(clientAddr string, request interface{}) interface{} { return request },
 	}
 	s.Start()
 	defer s.Stop()
@@ -401,9 +400,8 @@ func TestConcurrentCall(t *testing.T) {
 
 func TestCompress(t *testing.T) {
 	s := &Server{
-		Addr:       ":15352",
-		Handler:    func(clientAddr string, request interface{}) interface{} { return request },
-		FlushDelay: time.Millisecond,
+		Addr:    ":15352",
+		Handler: func(clientAddr string, request interface{}) interface{} { return request },
 	}
 	s.Start()
 	defer s.Stop()
