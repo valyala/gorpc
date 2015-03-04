@@ -1,7 +1,7 @@
 gorpc
 =====
 
-Simple, fast and scalable RPC library for high load.
+Simple, fast and scalable golang RPC library for high load.
 
 Unlike standard library at http://golang.org/pkg/net/rpc/ it multiplexes
 requests over a small number of TCP connections. This provides the following
@@ -25,6 +25,8 @@ high load.
 By default TCP connections are used as underlying gorpc transport. But you can
 use anything you want as an underlying transport - just provide custom
 implementations for Client.Dial and Server.Listener.
+RPC client authentication and authorization can be easily implemented via custom
+underlying transport.
 
 Currently gorpc with default settings is successfully used in highly loaded
 production environment serving up to 40K qps. Switching from http-based rpc

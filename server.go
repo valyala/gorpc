@@ -75,7 +75,7 @@ type Server struct {
 	// The server obtains new client connections via Listener.Accept().
 	//
 	// Override the listener if you want custom underlying transport
-	// for gorpc. For example, UDP-based, encrypted or SOAP-based :)
+	// and/or client authentication/authorization.
 	// Don't forget overriding Client.Dial() callback accordingly.
 	//
 	// If you need encrypted transport, then feel free using NewTLSDial()

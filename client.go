@@ -58,7 +58,7 @@ type Client struct {
 	// The client passes Client.Addr into Dial().
 	//
 	// Override this callback if you want custom underlying transport
-	// for gorpc. For example, UDP-based, encrypted or SOAP-based :)
+	// and/or client authentication/authorization.
 	// Don't forget overriding Server.Listener accordingly.
 	//
 	// If you need encrypted transport, then feel free using NewTLSDial()
