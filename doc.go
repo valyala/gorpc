@@ -1,5 +1,5 @@
 /*
-Package gorpc provides simple RPC API for highload project.
+Package gorpc provides simple RPC API for highload projects.
 
 Gorpc has the following features:
 
