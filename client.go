@@ -136,6 +136,7 @@ func (c *Client) Stop() {
 // from the server.
 // Returns non-nil error if the response cannot be obtained during
 // Client.RequestTimeout or server connection problems occur.
+// The returned error can be casted to ClientError.
 //
 // Request and response types may be arbitrary. All the response types
 // the server may return must be registered via gorpc.RegisterType() before
@@ -152,6 +153,7 @@ func (c *Client) Call(request interface{}) (response interface{}, err error) {
 // from the server.
 // Returns non-nil error if the response cannot be obtained during
 // the given timeout or server connection problems occur.
+// The returned error can be casted to ClientError.
 //
 // Request and response types may be arbitrary. All the response types
 // the server may return must be registered via gorpc.RegisterType() before
@@ -173,12 +175,18 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 		case <-time.After(timeout):
 			err := fmt.Errorf("gorpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
 			logError("%s", err)
-			return nil, err
+			return nil, &ClientError{
+				Timeout: true,
+				err:     err,
+			}
 		}
 	default:
 		err := fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
 		logError("%s", err)
-		return nil, err
+		return nil, &ClientError{
+			Overflow: true,
+			err:      err,
+		}
 	}
 }
 
@@ -212,6 +220,7 @@ type AsyncResult struct {
 	Response interface{}
 
 	// The error can be read only after <-Done unblocks.
+	// The error can be casted to ClientError.
 	Error error
 
 	// Response and Error become available after <-Done unblocks.
@@ -248,6 +257,24 @@ func (c *Client) CallAsyncTimeout(request interface{}, timeout time.Duration) *A
 		close(ch)
 	}()
 	return r
+}
+
+// ClientError is an error Client methods can return.
+type ClientError struct {
+	// Set if the error is timeout-related.
+	Timeout bool
+
+	// Set if the error is connection-related.
+	Connection bool
+
+	// Set if the error is related to internal resources' overflow.
+	Overflow bool
+
+	err error
+}
+
+func (e *ClientError) Error() string {
+	return e.err.Error()
 }
 
 func clientHandler(c *Client) {
@@ -322,6 +349,10 @@ func clientHandleConnection(c *Client, conn io.ReadWriteCloser) {
 
 	if err != nil {
 		logError("%s", err)
+		err = &ClientError{
+			Connection: true,
+			err:        err,
+		}
 	}
 	for _, m := range pendingRequests {
 		m.Error = err

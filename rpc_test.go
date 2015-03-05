@@ -90,6 +90,9 @@ func TestRequestTimeout(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Timeout error must be returned")
 		}
+		if !err.(*ClientError).Timeout {
+			t.Fatalf("Unexpected error returned: [%s]", err)
+		}
 		if resp != nil {
 			t.Fatalf("Unexpected response %+v: expected nil", resp)
 		}
@@ -120,6 +123,9 @@ func TestCallTimeout(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Timeout error must be returned")
 		}
+		if !err.(*ClientError).Timeout {
+			t.Fatalf("Unexpected error returned: [%s]", err)
+		}
 		if resp != nil {
 			t.Fatalf("Unexpected response %+v: expected nil", resp)
 		}
@@ -136,7 +142,10 @@ func TestNoServer(t *testing.T) {
 
 	resp, err := c.Call("foobar")
 	if err == nil {
-		t.Fatalf("Unexpected nil error")
+		t.Fatalf("Timeout error must be returned")
+	}
+	if !err.(*ClientError).Timeout {
+		t.Fatalf("Unexpected error: [%s]", err)
 	}
 	if resp != nil {
 		t.Fatalf("Unepxected response: %+v. Expected nil", resp)
@@ -191,30 +200,36 @@ func TestServerStuck(t *testing.T) {
 	c.Start()
 	defer c.Stop()
 
-	startT := time.Now()
+	var res [1500]*AsyncResult
+	for j := 0; j < 15; j++ {
+		for i := 0; i < 100; i++ {
+			res[i+100*j] = c.CallAsync("abc")
+		}
+		// This should prevent from overflow errors.
+		time.Sleep(10 * time.Millisecond)
+	}
+
 	timeoutErrors := 0
 	stuckErrors := 0
 
-	var wg sync.WaitGroup
-	for i := 0; i < 2000; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			resp, err := c.Call("abc")
-			if err == nil {
-				t.Fatalf("Stuck server returned response? %+v", resp)
-			}
-			if resp != nil {
-				t.Fatalf("Unexpected response from stuck server: %+v", resp)
-			}
-			if time.Since(startT) > c.RequestTimeout {
-				timeoutErrors++
-			} else {
-				stuckErrors++
-			}
-		}()
+	for i := 0; i < 1500; i++ {
+		r := res[i]
+		<-r.Done
+		if r.Error == nil {
+			t.Fatalf("Stuck server returned response? %+v", r.Response)
+		}
+		ce := r.Error.(*ClientError)
+		if ce.Timeout {
+			timeoutErrors++
+		} else if ce.Connection {
+			stuckErrors++
+		} else {
+			t.Fatalf("Unexpected error returned: [%s]", ce)
+		}
+		if r.Response != nil {
+			t.Fatalf("Unexpected response from stuck server: %+v", r.Response)
+		}
 	}
-	wg.Wait()
 
 	if timeoutErrors > stuckErrors {
 		t.Fatalf("Stuck server detector doesn't work? timeoutErrors=%d > stuckErrors=%d", timeoutErrors, stuckErrors)
