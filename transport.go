@@ -159,6 +159,10 @@ func NewUnixClient(addr string) *Client {
 		// There is little sense in compressing rpc data passed
 		// over local unix sockets.
 		DisableCompression: true,
+
+		// Sacrifice the number of Write() calls by smallest possible
+		// latency, since it has higher priority in local IPC.
+		FlushDelay: -1,
 	}
 }
 

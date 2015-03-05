@@ -34,7 +34,10 @@ type Client struct {
 	PendingRequests int
 
 	// Delay between request flushes.
-	// Negative values disable request buffering.
+	//
+	// Negative values lead to immediate requests' sending to the server
+	// without their buffering. This minimizes rpc latency at the cost
+	// of higher CPU and network usage.
 	//
 	// Default value is DefaultFlushDelay.
 	FlushDelay time.Duration
@@ -366,30 +369,27 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 		case <-stopChan:
 			return
 		case rpcM = <-c.requestsChan:
-			if flushChan == nil {
-				if c.FlushDelay > 0 {
-					flushChan = time.After(c.FlushDelay)
-				} else {
-					flushChan = closedFlushChan
-				}
-			}
-		case <-flushChan:
-			if !c.DisableCompression {
-				if err := ww.Flush(); err != nil {
-					err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush data to compressed stream: [%s]", c.Addr, err)
-					return
-				}
-				if err := zw.Flush(); err != nil {
-					err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush compressed data to wire: [%s]", c.Addr, err)
-					return
-				}
-			}
-			if err := bw.Flush(); err != nil {
-				err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush requests to wire: [%s]", c.Addr, err)
+		default:
+			select {
+			case <-stopChan:
 				return
+			case rpcM = <-c.requestsChan:
+			case <-flushChan:
+				if err := flushStreams(!c.DisableCompression, ww, zw, bw); err != nil {
+					err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush requests to underlying stream: [%s]", c.Addr, err)
+					return
+				}
+				flushChan = nil
+				continue
 			}
-			flushChan = nil
-			continue
+		}
+
+		if flushChan == nil {
+			if c.FlushDelay > 0 {
+				flushChan = time.After(c.FlushDelay)
+			} else {
+				flushChan = closedFlushChan
+			}
 		}
 
 		msgID++

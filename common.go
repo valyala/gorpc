@@ -141,3 +141,22 @@ func (r *readerCounter) Read(p []byte) (int, error) {
 	atomic.AddUint64(r.bytesRead, uint64(n))
 	return n, err
 }
+
+type flusher interface {
+	Flush() error
+}
+
+func flushStreams(enabledCompression bool, ww, zw, bw flusher) error {
+	if enabledCompression {
+		if err := ww.Flush(); err != nil {
+			return err
+		}
+		if err := zw.Flush(); err != nil {
+			return err
+		}
+	}
+	if err := bw.Flush(); err != nil {
+		return err
+	}
+	return nil
+}
