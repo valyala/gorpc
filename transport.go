@@ -15,6 +15,12 @@ var (
 )
 
 // DialFunc is a function intended for setting to Client.Dial.
+//
+// It is expected that the returned conn immediately
+// sends all the data passed via Write() to the server.
+// Otherwise gorpc may hang.
+// The conn implementation must call Flush() on underlying buffered
+// streams before returning from Write().
 type DialFunc func(addr string) (conn io.ReadWriteCloser, err error)
 
 func defaultDial(addr string) (conn io.ReadWriteCloser, err error) {

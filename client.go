@@ -66,12 +66,6 @@ type Client struct {
 	// If you need encrypted transport, then feel free using NewTLSDial()
 	// on the client and NewTLSListener() helpers on the server.
 	//
-	// It is expected that the returned conn immediately
-	// sends all the data passed via Write() to the server.
-	// Otherwise gorpc may hang.
-	// The conn implementation must call Flush() on underlying buffered
-	// streams before returning from Write().
-	//
 	// By default it returns TCP connections established
 	// to the Client.Addr.
 	Dial DialFunc
