@@ -1,9 +1,6 @@
 package gorpc
 
 import (
-	"bufio"
-	"compress/flate"
-	"encoding/gob"
 	"fmt"
 	"io"
 	"runtime"
@@ -238,16 +235,8 @@ type serverMessage struct {
 func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
 	defer func() { close(done) }()
 
-	r = newReaderCounter(r, &s.Stats)
-	br := bufio.NewReaderSize(r, s.RecvBufferSize)
-
-	rr := br
-	if enabledCompression {
-		zr := flate.NewReader(br)
-		defer zr.Close()
-		rr = bufio.NewReaderSize(zr, s.RecvBufferSize)
-	}
-	d := gob.NewDecoder(rr)
+	d := newMessageDecoder(r, s.RecvBufferSize, enabledCompression, &s.Stats)
+	defer d.Close()
 
 	for {
 		var m wireMessage
@@ -295,17 +284,8 @@ func callHandlerWithRecover(s *Server, clientAddr string, request interface{}) i
 func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-chan *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
 	defer func() { close(done) }()
 
-	w = newWriterCounter(w, &s.Stats)
-	bw := bufio.NewWriterSize(w, s.SendBufferSize)
-
-	ww := bw
-	var zw *flate.Writer
-	if enabledCompression {
-		zw, _ = flate.NewWriter(bw, flate.BestSpeed)
-		defer zw.Close()
-		ww = bufio.NewWriterSize(zw, s.SendBufferSize)
-	}
-	e := gob.NewEncoder(ww)
+	e := newMessageEncoder(w, s.SendBufferSize, enabledCompression, &s.Stats)
+	defer e.Close()
 
 	var (
 		flushChan       <-chan time.Time
@@ -326,7 +306,7 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 				return
 			case rpcM = <-responsesChan:
 			case <-flushChan:
-				if err := flushStreams(enabledCompression, ww, zw, bw); err != nil {
+				if err := e.Flush(); err != nil {
 					logError("gorpc.Server: [%s]->[%s]: Cannot flush responses to underlying stream: [%s]", clientAddr, s.Addr, err)
 					return
 				}

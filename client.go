@@ -1,9 +1,6 @@
 package gorpc
 
 import (
-	"bufio"
-	"compress/flate"
-	"encoding/gob"
 	"fmt"
 	"io"
 	"sync"
@@ -343,17 +340,8 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 	var err error
 	defer func() { done <- err }()
 
-	w = newWriterCounter(w, &c.Stats)
-	bw := bufio.NewWriterSize(w, c.SendBufferSize)
-
-	ww := bw
-	var zw *flate.Writer
-	if !c.DisableCompression {
-		zw, _ = flate.NewWriter(bw, flate.BestSpeed)
-		defer zw.Close()
-		ww = bufio.NewWriterSize(zw, c.SendBufferSize)
-	}
-	e := gob.NewEncoder(ww)
+	e := newMessageEncoder(w, c.SendBufferSize, !c.DisableCompression, &c.Stats)
+	defer e.Close()
 
 	var (
 		flushChan       <-chan time.Time
@@ -375,7 +363,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 				return
 			case rpcM = <-c.requestsChan:
 			case <-flushChan:
-				if err := flushStreams(!c.DisableCompression, ww, zw, bw); err != nil {
+				if err := e.Flush(); err != nil {
 					err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush requests to underlying stream: [%s]", c.Addr, err)
 					return
 				}
@@ -418,16 +406,8 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 	var err error
 	defer func() { done <- err }()
 
-	r = newReaderCounter(r, &c.Stats)
-	br := bufio.NewReaderSize(r, c.RecvBufferSize)
-
-	rr := br
-	if !c.DisableCompression {
-		zr := flate.NewReader(br)
-		defer zr.Close()
-		rr = bufio.NewReaderSize(zr, c.RecvBufferSize)
-	}
-	d := gob.NewDecoder(rr)
+	d := newMessageDecoder(r, c.RecvBufferSize, !c.DisableCompression, &c.Stats)
+	defer d.Close()
 
 	for {
 		var m wireMessage
