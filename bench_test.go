@@ -199,7 +199,7 @@ func benchEchoStruct(b *testing.B, workers int, disableCompression bool) {
 }
 
 func benchEchoFunc(b *testing.B, workers int, disableCompression bool, f func(*Client, int)) {
-	s, c := createEchoServerAndClient(disableCompression, b.N)
+	s, c := createEchoServerAndClient(b, disableCompression, b.N)
 	defer s.Stop()
 	defer c.Stop()
 
@@ -228,13 +228,15 @@ func benchEchoFunc(b *testing.B, workers int, disableCompression bool, f func(*C
 	wg.Wait()
 }
 
-func createEchoServerAndClient(disableCompression bool, pendingMessages int) (s *Server, c *Client) {
+func createEchoServerAndClient(b *testing.B, disableCompression bool, pendingMessages int) (s *Server, c *Client) {
 	s = &Server{
 		Addr:             ":15347",
 		Handler:          func(clientAddr string, request interface{}) interface{} { return request },
 		PendingResponses: pendingMessages,
 	}
-	s.Start()
+	if err := s.Start(); err != nil {
+		b.Fatalf("Cannot start gorpc server: [%s]", err)
+	}
 
 	c = &Client{
 		Addr:               ":15347",
