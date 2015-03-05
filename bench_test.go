@@ -3,6 +3,8 @@ package gorpc
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -229,8 +231,9 @@ func benchEchoFunc(b *testing.B, workers int, disableCompression bool, f func(*C
 }
 
 func createEchoServerAndClient(b *testing.B, disableCompression bool, pendingMessages int) (s *Server, c *Client) {
+	addr := fmt.Sprintf(":%d", rand.Intn(20000)+10000)
 	s = &Server{
-		Addr:             ":15347",
+		Addr:             addr,
 		Handler:          func(clientAddr string, request interface{}) interface{} { return request },
 		PendingResponses: pendingMessages,
 	}
@@ -239,7 +242,8 @@ func createEchoServerAndClient(b *testing.B, disableCompression bool, pendingMes
 	}
 
 	c = &Client{
-		Addr:               ":15347",
+		Addr:               addr,
+		Conns:              runtime.GOMAXPROCS(-1),
 		DisableCompression: disableCompression,
 		PendingRequests:    pendingMessages,
 	}
