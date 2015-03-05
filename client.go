@@ -302,31 +302,42 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 		select {
 		case <-stopChan:
 			return
+		default:
+		}
+
+		select {
 		case rpcM = <-c.requestsChan:
-			if flushChan == nil {
-				if c.FlushDelay > 0 {
-					flushChan = time.After(c.FlushDelay)
-				} else {
-					flushChan = closedFlushChan
-				}
-			}
-		case <-flushChan:
-			if !c.DisableCompression {
-				if err := ww.Flush(); err != nil {
-					err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush data to compressed stream: [%s]", c.Addr, err)
-					return
-				}
-				if err := zw.Flush(); err != nil {
-					err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush compressed data to wire: [%s]", c.Addr, err)
-					return
-				}
-			}
-			if err := bw.Flush(); err != nil {
-				err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush requests to wire: [%s]", c.Addr, err)
+		default:
+			select {
+			case <-stopChan:
 				return
+			case rpcM = <-c.requestsChan:
+			case <-flushChan:
+				if !c.DisableCompression {
+					if err := ww.Flush(); err != nil {
+						err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush data to compressed stream: [%s]", c.Addr, err)
+						return
+					}
+					if err := zw.Flush(); err != nil {
+						err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush compressed data to wire: [%s]", c.Addr, err)
+						return
+					}
+				}
+				if err := bw.Flush(); err != nil {
+					err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush requests to wire: [%s]", c.Addr, err)
+					return
+				}
+				flushChan = nil
+				continue
 			}
-			flushChan = nil
-			continue
+		}
+
+		if flushChan == nil {
+			if c.FlushDelay > 0 {
+				flushChan = time.After(c.FlushDelay)
+			} else {
+				flushChan = closedFlushChan
+			}
 		}
 
 		msgID++
