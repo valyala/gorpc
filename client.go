@@ -197,6 +197,8 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 //
 // The server may return arbitrary response on Send() request, but the response
 // is totally ignored.
+//
+// Don't forget starting the client with Client.Start() before calling Client.Send().
 func (c *Client) Send(request interface{}) {
 	m := clientMessage{
 		Request: request,
@@ -226,6 +228,9 @@ type AsyncResult struct {
 //
 // Rpc call is complete after <-AsyncResult.Done unblocks.
 // If you want canceling the request, just throw away the returned AsyncResult.
+//
+// Don't forget starting the client with Client.Start() before
+// calling Client.CallAsync().
 func (c *Client) CallAsync(request interface{}) *AsyncResult {
 	return c.CallAsyncTimeout(request, c.RequestTimeout)
 }
@@ -235,6 +240,9 @@ func (c *Client) CallAsync(request interface{}) *AsyncResult {
 //
 // Rpc call is complete after <-AsyncResult.Done unblocks.
 // If you want canceling the request, just throw away the returned AsyncResult.
+//
+// Don't forget starting the client with Client.Start() before
+// calling Client.CallAsyncTimeout().
 func (c *Client) CallAsyncTimeout(request interface{}, timeout time.Duration) *AsyncResult {
 	ch := make(chan struct{})
 	r := &AsyncResult{
