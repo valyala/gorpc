@@ -117,7 +117,7 @@ func unixDial(addr string) (conn io.ReadWriteCloser, err error) {
 	return c, err
 }
 
-// NewUnixClient creates a client connecting over TCP to the server
+// NewTCPClient creates a client connecting over TCP to the server
 // listening to the given addr.
 //
 // The returned client must be started after optional settings' adjustment.
