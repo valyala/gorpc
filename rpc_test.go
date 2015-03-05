@@ -306,6 +306,10 @@ func TestCustomTransport(t *testing.T) {
 	c.Start()
 	defer c.Stop()
 
+	testIntClient(t, c)
+}
+
+func testIntClient(t *testing.T, c *Client) {
 	for i := 0; i < 10; i++ {
 		resp, err := c.Call(i)
 		if err != nil {
@@ -319,6 +323,21 @@ func TestCustomTransport(t *testing.T) {
 			t.Fatalf("Unexpected value returned: %d. Expected %d", x, i)
 		}
 	}
+}
+
+func TestTCPTransport(t *testing.T) {
+	addr := ":23732"
+	s := NewTCPServer(addr, echoHandler)
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := NewTCPClient(addr)
+	c.Start()
+	defer c.Stop()
+
+	testIntClient(t, c)
 }
 
 func TestUnixTransport(t *testing.T) {
@@ -333,19 +352,7 @@ func TestUnixTransport(t *testing.T) {
 	c.Start()
 	defer c.Stop()
 
-	for i := 0; i < 10; i++ {
-		resp, err := c.Call(i)
-		if err != nil {
-			t.Fatalf("Unexpected error: [%s]", err)
-		}
-		x, ok := resp.(int)
-		if !ok {
-			t.Fatalf("Unexpected response type: %T. Expected int", resp)
-		}
-		if x != i {
-			t.Fatalf("Unexpected value returned: %d. Expected %d", x, i)
-		}
-	}
+	testIntClient(t, c)
 }
 
 func TestTLSTransport(t *testing.T) {
@@ -360,7 +367,7 @@ func TestTLSTransport(t *testing.T) {
 		InsecureSkipVerify: true,
 	}
 
-	s := NewTLSServer(":12345", cfg, echoHandler)
+	s := NewTLSServer(":12345", echoHandler, cfg)
 	if err := s.Start(); err != nil {
 		t.Fatalf("Server.Start() failed: [%s]", err)
 	}
@@ -370,19 +377,7 @@ func TestTLSTransport(t *testing.T) {
 	c.Start()
 	defer c.Stop()
 
-	for i := 0; i < 10; i++ {
-		resp, err := c.Call(i)
-		if err != nil {
-			t.Fatalf("Unexpected error: [%s]", err)
-		}
-		x, ok := resp.(int)
-		if !ok {
-			t.Fatalf("Unexpected response type: %T. Expected int", resp)
-		}
-		if x != i {
-			t.Fatalf("Unexpected value returned: %d. Expected %d", x, i)
-		}
-	}
+	testIntClient(t, c)
 }
 
 func TestNoRequestBufferring(t *testing.T) {
@@ -421,19 +416,7 @@ func testNoBufferring(t *testing.T, requestFlushDelay, responseFlushDelay time.D
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for i := 0; i < 10; i++ {
-				resp, err := c.Call(i)
-				if err != nil {
-					t.Fatalf("Unexpected error: [%s]", err)
-				}
-				x, ok := resp.(int)
-				if !ok {
-					t.Fatalf("Unexpected response type: %T. Expected int", resp)
-				}
-				if x != i {
-					t.Fatalf("Unexpected value returned: %d. Expected %d", x, i)
-				}
-			}
+			testIntClient(t, c)
 		}()
 	}
 	wg.Wait()

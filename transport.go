@@ -117,6 +117,34 @@ func unixDial(addr string) (conn io.ReadWriteCloser, err error) {
 	return c, err
 }
 
+// NewUnixClient creates a client connecting over TCP to the server
+// listening to the given addr.
+//
+// The returned client must be started after optional settings' adjustment.
+//
+// The corresponding server must be created with NewTCPServer().
+func NewTCPClient(addr string) *Client {
+	return &Client{
+		Addr: addr,
+		Dial: defaultDial,
+	}
+}
+
+// NewTCPServer creates a server listening for TCP connections
+// on the given addr and processing incoming requests
+// with the given HandlerFunc.
+//
+// The returned server must be started after optional settings' adjustment.
+//
+// The corresponding client must be created with NewTCPClient().
+func NewTCPServer(addr string, handler HandlerFunc) *Server {
+	return &Server{
+		Addr:     addr,
+		Handler:  handler,
+		Listener: &defaultListener{},
+	}
+}
+
 // NewUnixClient creates a client connecting over unix socket
 // to the server listening to the given addr.
 //
@@ -180,7 +208,7 @@ func NewTLSClient(addr string, cfg *tls.Config) *Client {
 // The returned server must be started after optional settings' adjustment.
 //
 // The corresponding client must be created with NewTLSClient().
-func NewTLSServer(addr string, cfg *tls.Config, handler HandlerFunc) *Server {
+func NewTLSServer(addr string, handler HandlerFunc, cfg *tls.Config) *Server {
 	return &Server{
 		Addr:    addr,
 		Handler: handler,
