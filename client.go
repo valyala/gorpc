@@ -209,6 +209,44 @@ func (c *Client) Send(request interface{}) {
 	}
 }
 
+// AsyncResult is a result returned from Client.CallAsync*().
+type AsyncResult struct {
+	// The response can be read only after <-Done unblocks.
+	Response interface{}
+
+	// The error can be read only after <-Done unblocks.
+	Error error
+
+	// Response and Error become available after <-Done unblocks.
+	Done <-chan struct{}
+}
+
+// CallAsync starts async rpc call, which should be completed
+// during Client.RequestTimeout.
+//
+// Rpc call is complete after <-AsyncResult.Done unblocks.
+// If you want canceling the request, just throw away the returned AsyncResult.
+func (c *Client) CallAsync(request interface{}) *AsyncResult {
+	return c.CallAsyncTimeout(request, c.RequestTimeout)
+}
+
+// CallAsyncTimeout starts async rpc call, which should be completed
+// during the given timeout.
+//
+// Rpc call is complete after <-AsyncResult.Done unblocks.
+// If you want canceling the request, just throw away the returned AsyncResult.
+func (c *Client) CallAsyncTimeout(request interface{}, timeout time.Duration) *AsyncResult {
+	ch := make(chan struct{})
+	r := &AsyncResult{
+		Done: ch,
+	}
+	go func() {
+		r.Response, r.Error = c.CallTimeout(request, timeout)
+		close(ch)
+	}()
+	return r
+}
+
 func clientHandler(c *Client) {
 	defer c.stopWg.Done()
 

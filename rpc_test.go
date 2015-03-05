@@ -455,6 +455,42 @@ func TestSend(t *testing.T) {
 	wg.Wait()
 }
 
+func TestCallAsync(t *testing.T) {
+	s := &Server{
+		Addr:    ":15447",
+		Handler: func(clientAddr string, request interface{}) interface{} { return request },
+	}
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := &Client{
+		Addr: ":15447",
+	}
+	c.Start()
+	defer c.Stop()
+
+	var res [10]*AsyncResult
+	for i := 0; i < 10; i++ {
+		res[i] = c.CallAsync(i)
+	}
+	for i := 0; i < 10; i++ {
+		r := res[i]
+		<-r.Done
+		if r.Error != nil {
+			t.Fatalf("Unexpected error: [%s]", r.Error)
+		}
+		x, ok := r.Response.(int)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected int", r.Response)
+		}
+		if x != i {
+			t.Fatalf("Unexpected value returned: %d. Expected %d", x, i)
+		}
+	}
+}
+
 func TestIntHandler(t *testing.T) {
 	s := &Server{
 		Addr:    ":15347",
