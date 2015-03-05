@@ -61,6 +61,8 @@ type Server struct {
 	PendingResponses int
 
 	// The maximum delay between response flushes to clients.
+	// Negative values disable responses' buffering.
+	//
 	// Default is DefaultFlushDelay.
 	FlushDelay time.Duration
 
@@ -113,7 +115,7 @@ func (s *Server) Start() error {
 	if s.PendingResponses <= 0 {
 		s.PendingResponses = DefaultPendingMessages
 	}
-	if s.FlushDelay <= 0 {
+	if s.FlushDelay == 0 {
 		s.FlushDelay = DefaultFlushDelay
 	}
 	if s.SendBufferSize <= 0 {
@@ -322,7 +324,11 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 	}
 	e := gob.NewEncoder(ww)
 
-	var flushChan <-chan time.Time
+	var (
+		flushChan       <-chan time.Time
+		closedFlushChan = make(chan time.Time)
+	)
+	close(closedFlushChan)
 
 	for {
 		var rpcM *serverMessage
@@ -332,7 +338,11 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 			return
 		case rpcM = <-responsesChan:
 			if flushChan == nil {
-				flushChan = time.After(s.FlushDelay)
+				if s.FlushDelay > 0 {
+					flushChan = time.After(s.FlushDelay)
+				} else {
+					flushChan = closedFlushChan
+				}
 			}
 		case <-flushChan:
 			if enabledCompression {

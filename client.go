@@ -34,6 +34,8 @@ type Client struct {
 	PendingRequests int
 
 	// Delay between request flushes.
+	// Negative values disable request buffering.
+	//
 	// Default value is DefaultFlushDelay.
 	FlushDelay time.Duration
 
@@ -100,7 +102,7 @@ func (c *Client) Start() {
 	if c.PendingRequests <= 0 {
 		c.PendingRequests = DefaultPendingMessages
 	}
-	if c.FlushDelay <= 0 {
+	if c.FlushDelay == 0 {
 		c.FlushDelay = DefaultFlushDelay
 	}
 	if c.RequestTimeout <= 0 {
@@ -287,7 +289,11 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 	}
 	e := gob.NewEncoder(ww)
 
-	var flushChan <-chan time.Time
+	var (
+		flushChan       <-chan time.Time
+		closedFlushChan = make(chan time.Time)
+	)
+	close(closedFlushChan)
 
 	var msgID uint64
 	for {
@@ -298,7 +304,11 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			return
 		case rpcM = <-c.requestsChan:
 			if flushChan == nil {
-				flushChan = time.After(c.FlushDelay)
+				if c.FlushDelay > 0 {
+					flushChan = time.After(c.FlushDelay)
+				} else {
+					flushChan = closedFlushChan
+				}
 			}
 		case <-flushChan:
 			if !c.DisableCompression {

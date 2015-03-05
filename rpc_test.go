@@ -366,6 +366,60 @@ func TestTLS(t *testing.T) {
 	}
 }
 
+func TestNoRequestBufferring(t *testing.T) {
+	testNoBufferring(t, -1, DefaultFlushDelay)
+}
+
+func TestNoResponseBufferring(t *testing.T) {
+	testNoBufferring(t, DefaultFlushDelay, -1)
+}
+
+func TestNoBufferring(t *testing.T) {
+	testNoBufferring(t, DefaultFlushDelay, DefaultFlushDelay)
+}
+
+func testNoBufferring(t *testing.T, requestFlushDelay, responseFlushDelay time.Duration) {
+	s := &Server{
+		Addr:       ":12345",
+		Handler:    func(clientAddr string, request interface{}) interface{} { return request },
+		FlushDelay: responseFlushDelay,
+	}
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := &Client{
+		Addr:           ":12345",
+		RequestTimeout: 100 * time.Millisecond,
+		FlushDelay:     requestFlushDelay,
+	}
+	c.Start()
+	defer c.Stop()
+
+	var wg sync.WaitGroup
+	for j := 0; j < 10; j++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < 10; i++ {
+				resp, err := c.Call(i)
+				if err != nil {
+					t.Fatalf("Unexpected error: [%s]", err)
+				}
+				x, ok := resp.(int)
+				if !ok {
+					t.Fatalf("Unexpected response type: %T. Expected int", resp)
+				}
+				if x != i {
+					t.Fatalf("Unexpected value returned: %d. Expected %d", x, i)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
 func TestIntHandler(t *testing.T) {
 	s := &Server{
 		Addr:    ":15347",
