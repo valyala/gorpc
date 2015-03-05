@@ -9,16 +9,18 @@ import (
 )
 
 const (
-	// Default timeout for the request on the Client.
+	// DefaultRequestTimeout is the default timeout for client request.
 	DefaultRequestTimeout = 20 * time.Second
 
-	// Default number of pending messages handled by Client and Server.
+	// DefaultPendingMessages is the default number of pending messages
+	// handled by Client and Server.
 	DefaultPendingMessages = 32 * 1024
 
-	// Default delay between message flushes on Client and Server.
+	// DefaultFlushDelay is the default delay between message flushes
+	// on Client and Server.
 	DefaultFlushDelay = 5 * time.Millisecond
 
-	// Default size for Client and Server buffers (both write and read)
+	// DefaultBufferSize is the default size for Client and Server buffers.
 	DefaultBufferSize = 64 * 1024
 )
 
