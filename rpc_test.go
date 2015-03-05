@@ -420,6 +420,41 @@ func testNoBufferring(t *testing.T, requestFlushDelay, responseFlushDelay time.D
 	wg.Wait()
 }
 
+func TestSend(t *testing.T) {
+	var wg sync.WaitGroup
+
+	s := &Server{
+		Addr: ":15347",
+		Handler: func(clientAddr string, request interface{}) interface{} {
+			x, ok := request.(int)
+			if !ok {
+				t.Fatalf("Unexpected request type: %T. Expected int", request)
+			}
+			if x != 12345 {
+				t.Fatalf("Unexpected request: %d. Expected 12345", x)
+			}
+			wg.Done()
+			return "foobar_ignored"
+		},
+	}
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := &Client{
+		Addr: ":15347",
+	}
+	c.Start()
+	defer c.Stop()
+
+	wg.Add(100)
+	for i := 0; i < 100; i++ {
+		c.Send(12345)
+	}
+	wg.Wait()
+}
+
 func TestIntHandler(t *testing.T) {
 	s := &Server{
 		Addr:    ":15347",

@@ -187,6 +187,28 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 	}
 }
 
+// Send sends the given request to the server and doesn't wait for response.
+//
+// Since this is 'fire and forget' function, which never waits for response,
+// it cannot guarantee that the server receives and successfully processes
+// the given request. Though in most cases under normal conditions requests
+// should reach the server and it should successfully process them.
+// Send semantics is similar to UDP messages' semantics.
+//
+// The server may return arbitrary response on Send() request, but the response
+// is totally ignored.
+func (c *Client) Send(request interface{}) {
+	m := clientMessage{
+		Request: request,
+		Done:    make(chan struct{}),
+	}
+	select {
+	case c.requestsChan <- &m:
+	default:
+		logError("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
+	}
+}
+
 func clientHandler(c *Client) {
 	defer c.stopWg.Done()
 

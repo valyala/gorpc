@@ -60,12 +60,18 @@ c := &Client{
 }
 c.Start()
 
+// RPC call
 resp, err := c.Call("foobar")
 if err != nil {
 	log.Fatalf("Error when sending request to server: %s", err)
 }
 if resp.(string) != "foobar" {
 	log.Fatalf("Unexpected response from the server: %+v", resp)
+}
+
+// Non-blocking request send
+for i := 0; i < 10; i++ {
+	c.Send(i)
 }
 ```
 
