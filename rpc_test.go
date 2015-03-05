@@ -247,17 +247,20 @@ type customListener struct {
 }
 
 func newCustomListener(remoteAddr string, r io.ReadCloser, w io.WriteCloser) *customListener {
-	ch := make(chan struct{}, 1)
-	ch <- struct{}{}
 	return &customListener{
 		remoteAddr: remoteAddr,
 		r:          r,
 		w:          w,
-		ch:         ch,
 	}
 }
 
-func (ln *customListener) Accept(addr string) (conn io.ReadWriteCloser, clientAddr string, err error) {
+func (ln *customListener) Init(addr string) error {
+	ln.ch = make(chan struct{}, 1)
+	ln.ch <- struct{}{}
+	return nil
+}
+
+func (ln *customListener) Accept() (conn io.ReadWriteCloser, clientAddr string, err error) {
 	_, ok := <-ln.ch
 	if !ok {
 		return nil, "", fmt.Errorf("listener is closed")
@@ -318,7 +321,34 @@ func TestCustomTransport(t *testing.T) {
 	}
 }
 
-func TestTLS(t *testing.T) {
+func TestUnixTransport(t *testing.T) {
+	addr := "./gorpc-test-sock.unix"
+	s := NewUnixServer(addr, echoHandler)
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := NewUnixClient(addr)
+	c.Start()
+	defer c.Stop()
+
+	for i := 0; i < 10; i++ {
+		resp, err := c.Call(i)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		x, ok := resp.(int)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected int", resp)
+		}
+		if x != i {
+			t.Fatalf("Unexpected value returned: %d. Expected %d", x, i)
+		}
+	}
+}
+
+func TestTLSTransport(t *testing.T) {
 	certFile := "./ssl-cert-snakeoil.pem"
 	keyFile := "./ssl-cert-snakeoil.key"
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
@@ -330,24 +360,13 @@ func TestTLS(t *testing.T) {
 		InsecureSkipVerify: true,
 	}
 
-	ln, err := NewTLSListener(":12345", cfg)
-	if err != nil {
-		t.Fatalf("Cannot create tls listener: [%s]", err)
-	}
-
-	s := &Server{
-		Listener: ln,
-		Handler:  func(clientAddr string, request interface{}) interface{} { return request },
-	}
+	s := NewTLSServer(":12345", cfg, echoHandler)
 	if err := s.Start(); err != nil {
 		t.Fatalf("Server.Start() failed: [%s]", err)
 	}
 	defer s.Stop()
 
-	c := &Client{
-		Addr: ":12345",
-		Dial: NewTLSDial(cfg),
-	}
+	c := NewTLSClient(":12345", cfg)
 	c.Start()
 	defer c.Stop()
 
@@ -381,7 +400,7 @@ func TestNoBufferring(t *testing.T) {
 func testNoBufferring(t *testing.T, requestFlushDelay, responseFlushDelay time.Duration) {
 	s := &Server{
 		Addr:       ":12345",
-		Handler:    func(clientAddr string, request interface{}) interface{} { return request },
+		Handler:    echoHandler,
 		FlushDelay: responseFlushDelay,
 	}
 	if err := s.Start(); err != nil {
@@ -458,7 +477,7 @@ func TestSend(t *testing.T) {
 func TestCallAsync(t *testing.T) {
 	s := &Server{
 		Addr:    ":15447",
-		Handler: func(clientAddr string, request interface{}) interface{} { return request },
+		Handler: echoHandler,
 	}
 	if err := s.Start(); err != nil {
 		t.Fatalf("Server.Start() failed: [%s]", err)
@@ -604,7 +623,7 @@ func TestEchoHandler(t *testing.T) {
 
 	s := &Server{
 		Addr:    ":15350",
-		Handler: func(clientAddr string, request interface{}) interface{} { return request },
+		Handler: echoHandler,
 	}
 	if err := s.Start(); err != nil {
 		t.Fatalf("Server.Start() failed: [%s]", err)
@@ -657,7 +676,7 @@ func TestEchoHandler(t *testing.T) {
 func TestConcurrentCall(t *testing.T) {
 	s := &Server{
 		Addr:       ":15351",
-		Handler:    func(clientAddr string, request interface{}) interface{} { return request },
+		Handler:    echoHandler,
 		FlushDelay: time.Millisecond,
 	}
 	if err := s.Start(); err != nil {
@@ -695,7 +714,7 @@ func TestConcurrentCall(t *testing.T) {
 func TestCompress(t *testing.T) {
 	s := &Server{
 		Addr:       ":15352",
-		Handler:    func(clientAddr string, request interface{}) interface{} { return request },
+		Handler:    echoHandler,
 		FlushDelay: time.Millisecond,
 	}
 	if err := s.Start(); err != nil {

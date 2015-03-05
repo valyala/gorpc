@@ -27,6 +27,7 @@ use anything you want as an underlying transport - just provide custom
 implementations for Client.Dial and Server.Listener.
 RPC client authentication and authorization can be easily implemented via custom
 underlying transport.
+Currently gorpc provides TCP, TLS and unix socket transport out of the box.
 
 Currently gorpc with default settings is successfully used in highly loaded
 production environment serving up to 40K qps. Switching from http-based rpc

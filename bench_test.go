@@ -10,127 +10,187 @@ import (
 )
 
 func BenchmarkEchoInt1Worker(b *testing.B) {
-	benchEchoInt(b, 1, false)
+	benchEchoInt(b, 1, false, false)
 }
 
 func BenchmarkEchoInt10Workers(b *testing.B) {
-	benchEchoInt(b, 10, false)
+	benchEchoInt(b, 10, false, false)
 }
 
 func BenchmarkEchoInt100Workers(b *testing.B) {
-	benchEchoInt(b, 100, false)
+	benchEchoInt(b, 100, false, false)
 }
 
 func BenchmarkEchoInt1000Workers(b *testing.B) {
-	benchEchoInt(b, 1000, false)
+	benchEchoInt(b, 1000, false, false)
 }
 
 func BenchmarkEchoInt10000Workers(b *testing.B) {
-	benchEchoInt(b, 10000, false)
+	benchEchoInt(b, 10000, false, false)
+}
+
+func BenchmarkEchoIntUnix1Worker(b *testing.B) {
+	benchEchoInt(b, 1, false, true)
+}
+
+func BenchmarkEchoIntUnix10Workers(b *testing.B) {
+	benchEchoInt(b, 10, false, true)
+}
+
+func BenchmarkEchoIntUnix100Workers(b *testing.B) {
+	benchEchoInt(b, 100, false, true)
+}
+
+func BenchmarkEchoIntUnix1000Workers(b *testing.B) {
+	benchEchoInt(b, 1000, false, true)
+}
+
+func BenchmarkEchoIntUnix10000Workers(b *testing.B) {
+	benchEchoInt(b, 10000, false, true)
 }
 
 func BenchmarkEchoIntNocompress1Worker(b *testing.B) {
-	benchEchoInt(b, 1, true)
+	benchEchoInt(b, 1, true, false)
 }
 
 func BenchmarkEchoIntNocompress10Workers(b *testing.B) {
-	benchEchoInt(b, 10, true)
+	benchEchoInt(b, 10, true, false)
 }
 
 func BenchmarkEchoIntNocompress100Workers(b *testing.B) {
-	benchEchoInt(b, 100, true)
+	benchEchoInt(b, 100, true, false)
 }
 
 func BenchmarkEchoIntNocompress1000Workers(b *testing.B) {
-	benchEchoInt(b, 1000, true)
+	benchEchoInt(b, 1000, true, false)
 }
 
 func BenchmarkEchoIntNocompress10000Workers(b *testing.B) {
-	benchEchoInt(b, 10000, true)
+	benchEchoInt(b, 10000, true, false)
 }
 
 func BenchmarkEchoString1Worker(b *testing.B) {
-	benchEchoString(b, 1, false)
+	benchEchoString(b, 1, false, false)
 }
 
 func BenchmarkEchoString10Workers(b *testing.B) {
-	benchEchoString(b, 10, false)
+	benchEchoString(b, 10, false, false)
 }
 
 func BenchmarkEchoString100Workers(b *testing.B) {
-	benchEchoString(b, 100, false)
+	benchEchoString(b, 100, false, false)
 }
 
 func BenchmarkEchoString1000Workers(b *testing.B) {
-	benchEchoString(b, 1000, false)
+	benchEchoString(b, 1000, false, false)
 }
 
 func BenchmarkEchoString10000Workers(b *testing.B) {
-	benchEchoString(b, 10000, false)
+	benchEchoString(b, 10000, false, false)
+}
+
+func BenchmarkEchoStringUnix1Worker(b *testing.B) {
+	benchEchoString(b, 1, false, true)
+}
+
+func BenchmarkEchoStringUnix10Workers(b *testing.B) {
+	benchEchoString(b, 10, false, true)
+}
+
+func BenchmarkEchoStringUnix100Workers(b *testing.B) {
+	benchEchoString(b, 100, false, true)
+}
+
+func BenchmarkEchoStringUnix1000Workers(b *testing.B) {
+	benchEchoString(b, 1000, false, true)
+}
+
+func BenchmarkEchoStringUnix10000Workers(b *testing.B) {
+	benchEchoString(b, 10000, false, true)
 }
 
 func BenchmarkEchoStringNocompress1Worker(b *testing.B) {
-	benchEchoString(b, 1, true)
+	benchEchoString(b, 1, true, false)
 }
 
 func BenchmarkEchoStringNocompress10Workers(b *testing.B) {
-	benchEchoString(b, 10, true)
+	benchEchoString(b, 10, true, false)
 }
 
 func BenchmarkEchoStringNocompress100Workers(b *testing.B) {
-	benchEchoString(b, 100, true)
+	benchEchoString(b, 100, true, false)
 }
 
 func BenchmarkEchoStringNocompress1000Workers(b *testing.B) {
-	benchEchoString(b, 1000, true)
+	benchEchoString(b, 1000, true, false)
 }
 
 func BenchmarkEchoStringNocompress10000Workers(b *testing.B) {
-	benchEchoString(b, 10000, true)
+	benchEchoString(b, 10000, true, false)
 }
 
 func BenchmarkEchoStruct1Worker(b *testing.B) {
-	benchEchoStruct(b, 1, false)
+	benchEchoStruct(b, 1, false, false)
 }
 
 func BenchmarkEchoStruct10Workers(b *testing.B) {
-	benchEchoStruct(b, 10, false)
+	benchEchoStruct(b, 10, false, false)
 }
 
 func BenchmarkEchoStruct100Workers(b *testing.B) {
-	benchEchoStruct(b, 100, false)
+	benchEchoStruct(b, 100, false, false)
 }
 
 func BenchmarkEchoStruct1000Workers(b *testing.B) {
-	benchEchoStruct(b, 1000, false)
+	benchEchoStruct(b, 1000, false, false)
 }
 
 func BenchmarkEchoStruct10000Workers(b *testing.B) {
-	benchEchoStruct(b, 10000, false)
+	benchEchoStruct(b, 10000, false, false)
+}
+
+func BenchmarkEchoStructUnix1Worker(b *testing.B) {
+	benchEchoStruct(b, 1, false, true)
+}
+
+func BenchmarkEchoStructUnix10Workers(b *testing.B) {
+	benchEchoStruct(b, 10, false, true)
+}
+
+func BenchmarkEchoStructUnix100Workers(b *testing.B) {
+	benchEchoStruct(b, 100, false, true)
+}
+
+func BenchmarkEchoStructUnix1000Workers(b *testing.B) {
+	benchEchoStruct(b, 1000, false, true)
+}
+
+func BenchmarkEchoStructUnix10000Workers(b *testing.B) {
+	benchEchoStruct(b, 10000, false, true)
 }
 
 func BenchmarkEchoStructNocompress1Worker(b *testing.B) {
-	benchEchoStruct(b, 1, true)
+	benchEchoStruct(b, 1, true, false)
 }
 
 func BenchmarkEchoStructNocompress10Workers(b *testing.B) {
-	benchEchoStruct(b, 10, true)
+	benchEchoStruct(b, 10, true, false)
 }
 
 func BenchmarkEchoStructNocompress100Workers(b *testing.B) {
-	benchEchoStruct(b, 100, true)
+	benchEchoStruct(b, 100, true, false)
 }
 
 func BenchmarkEchoStructNocompress1000Workers(b *testing.B) {
-	benchEchoStruct(b, 1000, true)
+	benchEchoStruct(b, 1000, true, false)
 }
 
 func BenchmarkEchoStructNocompress10000Workers(b *testing.B) {
-	benchEchoStruct(b, 10000, true)
+	benchEchoStruct(b, 10000, true, false)
 }
 
-func benchEchoInt(b *testing.B, workers int, disableCompression bool) {
-	benchEchoFunc(b, workers, disableCompression, func(c *Client, n int) {
+func benchEchoInt(b *testing.B, workers int, disableCompression, isUnixTransport bool) {
+	benchEchoFunc(b, workers, disableCompression, isUnixTransport, func(c *Client, n int) {
 		resp, err := c.Call(n)
 		if err != nil {
 			b.Fatalf("Unexpected error: [%s]", err)
@@ -148,8 +208,8 @@ func benchEchoInt(b *testing.B, workers int, disableCompression bool) {
 	})
 }
 
-func benchEchoString(b *testing.B, workers int, disableCompression bool) {
-	benchEchoFunc(b, workers, disableCompression, func(c *Client, n int) {
+func benchEchoString(b *testing.B, workers int, disableCompression, isUnixTransport bool) {
+	benchEchoFunc(b, workers, disableCompression, isUnixTransport, func(c *Client, n int) {
 		s := fmt.Sprintf("test string %d", n)
 		resp, err := c.Call(s)
 		if err != nil {
@@ -168,7 +228,7 @@ func benchEchoString(b *testing.B, workers int, disableCompression bool) {
 	})
 }
 
-func benchEchoStruct(b *testing.B, workers int, disableCompression bool) {
+func benchEchoStruct(b *testing.B, workers int, disableCompression, isUnixTransport bool) {
 	type BenchEchoStruct struct {
 		A int
 		B string
@@ -177,7 +237,7 @@ func benchEchoStruct(b *testing.B, workers int, disableCompression bool) {
 
 	RegisterType(&BenchEchoStruct{})
 
-	benchEchoFunc(b, workers, disableCompression, func(c *Client, n int) {
+	benchEchoFunc(b, workers, disableCompression, isUnixTransport, func(c *Client, n int) {
 		s := &BenchEchoStruct{
 			A: n,
 			B: fmt.Sprintf("test string %d", n),
@@ -200,8 +260,8 @@ func benchEchoStruct(b *testing.B, workers int, disableCompression bool) {
 	})
 }
 
-func benchEchoFunc(b *testing.B, workers int, disableCompression bool, f func(*Client, int)) {
-	s, c := createEchoServerAndClient(b, disableCompression, b.N)
+func benchEchoFunc(b *testing.B, workers int, disableCompression, isUnixTransport bool, f func(*Client, int)) {
+	s, c := createEchoServerAndClient(b, disableCompression, b.N, isUnixTransport)
 	defer s.Stop()
 	defer c.Stop()
 
@@ -230,23 +290,29 @@ func benchEchoFunc(b *testing.B, workers int, disableCompression bool, f func(*C
 	wg.Wait()
 }
 
-func createEchoServerAndClient(b *testing.B, disableCompression bool, pendingMessages int) (s *Server, c *Client) {
-	addr := fmt.Sprintf(":%d", rand.Intn(20000)+10000)
-	s = &Server{
-		Addr:             addr,
-		Handler:          func(clientAddr string, request interface{}) interface{} { return request },
-		PendingResponses: pendingMessages,
+func createEchoServerAndClient(b *testing.B, disableCompression bool, pendingMessages int, isUnixTransport bool) (s *Server, c *Client) {
+	if isUnixTransport {
+		addr := "./gorpc-bench.sock"
+		s = NewUnixServer(addr, echoHandler)
+		c = NewUnixClient(addr)
+	} else {
+		addr := fmt.Sprintf(":%d", rand.Intn(20000)+10000)
+		s = &Server{
+			Addr:    addr,
+			Handler: echoHandler,
+		}
+		c = &Client{
+			Addr: addr,
+		}
 	}
+
 	if err := s.Start(); err != nil {
 		b.Fatalf("Cannot start gorpc server: [%s]", err)
 	}
 
-	c = &Client{
-		Addr:               addr,
-		Conns:              runtime.GOMAXPROCS(-1),
-		DisableCompression: disableCompression,
-		PendingRequests:    pendingMessages,
-	}
+	c.Conns = runtime.GOMAXPROCS(-1)
+	c.DisableCompression = disableCompression
+	c.PendingRequests = pendingMessages
 	c.Start()
 
 	return s, c

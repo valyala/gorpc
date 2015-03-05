@@ -63,8 +63,9 @@ type Client struct {
 	// and/or client authentication/authorization.
 	// Don't forget overriding Server.Listener accordingly.
 	//
-	// If you need encrypted transport, then feel free using NewTLSDial()
-	// on the client and NewTLSListener() helpers on the server.
+	// * NewTLSClient() and NewTLSServer() can be used for encrypted rpc.
+	// * NewUnixClient() and NewUnixServer() can be used for fast local
+	//   inter-process rpc.
 	//
 	// By default it returns TCP connections established
 	// to the Client.Addr.

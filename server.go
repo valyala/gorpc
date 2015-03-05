@@ -22,26 +22,6 @@ import (
 // float64, etc. or arrays, slices and maps containing base Go types.
 type HandlerFunc func(clientAddr string, request interface{}) (response interface{})
 
-// Listener is an interface for custom listeners intended for the Server.
-type Listener interface {
-	// Accept must return incoming connections from clients.
-	// The server passes Server.Addr in addr parameter.
-	// clientAddr must contain client's address in user-readable view.
-	//
-	// It is expected that the returned conn immediately
-	// sends all the data passed via Write() to the client.
-	// Otherwise gorpc may hang.
-	// The conn implementation must call Flush() on underlying buffered
-	// streams before returning from Write().
-	Accept(addr string) (conn io.ReadWriteCloser, clientAddr string, err error)
-
-	// Close closes the listener.
-	// All pending calls to Accept() must immediately return errors after
-	// Close is called.
-	// All subsequent calls to Accept() must immediately return error.
-	Close() error
-}
-
 // Server implements RPC server.
 //
 // Default server settings are optimized for high load, so don't override
@@ -80,8 +60,9 @@ type Server struct {
 	// and/or client authentication/authorization.
 	// Don't forget overriding Client.Dial() callback accordingly.
 	//
-	// If you need encrypted transport, then feel free using NewTLSDial()
-	// on the client and NewTLSListener() helpers on the server.
+	// * NewTLSClient() and NewTLSServer() can be used for encrypted rpc.
+	// * NewUnixClient() and NewUnixServer() can be used for fast local
+	//   inter-process rpc.
 	//
 	// By default it returns TCP connections accepted from Server.Addr.
 	Listener Listener
@@ -126,13 +107,12 @@ func (s *Server) Start() error {
 	}
 
 	if s.Listener == nil {
-		var err error
-		s.Listener, err = newDefaultListener(s.Addr)
-		if err != nil {
-			err := fmt.Errorf("gorpc.Server: [%s]. Cannot listen to: [%s]", s.Addr, err)
-			logError("%s", err)
-			return err
-		}
+		s.Listener = &defaultListener{}
+	}
+	if err := s.Listener.Init(s.Addr); err != nil {
+		err := fmt.Errorf("gorpc.Server: [%s]. Cannot listen to: [%s]", s.Addr, err)
+		logError("%s", err)
+		return err
 	}
 
 	s.stopWg.Add(1)
@@ -166,7 +146,7 @@ func serverHandler(s *Server) {
 	for {
 		acceptChan := make(chan struct{})
 		go func() {
-			if conn, clientAddr, err = s.Listener.Accept(s.Addr); err != nil {
+			if conn, clientAddr, err = s.Listener.Accept(); err != nil {
 				logError("gorpc.Server: [%s]. Cannot accept new connection: [%s]", s.Addr, err)
 				time.Sleep(time.Second)
 			}
