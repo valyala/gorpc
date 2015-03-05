@@ -74,7 +74,7 @@ type Client struct {
 	//
 	// By default it returns TCP connections established
 	// to the Client.Addr.
-	Dial func(addr string) (conn io.ReadWriteCloser, err error)
+	Dial DialFunc
 
 	// Connection statistics.
 	//

@@ -14,6 +14,9 @@ var (
 	}
 )
 
+// DialFunc is a function intended for setting to Client.Dial.
+type DialFunc func(addr string) (conn io.ReadWriteCloser, err error)
+
 func defaultDial(addr string) (conn io.ReadWriteCloser, err error) {
 	return dialer.Dial("tcp", addr)
 }
@@ -61,7 +64,7 @@ func setupKeepalive(conn net.Conn) error {
 
 // NewTLSDial creates Dial() function for TLS connections' establishing.
 // The returned function is intended for Client.Dial assignment.
-func NewTLSDial(cfg *tls.Config) func(addr string) (conn io.ReadWriteCloser, err error) {
+func NewTLSDial(cfg *tls.Config) DialFunc {
 	return func(addr string) (conn io.ReadWriteCloser, err error) {
 		c, err := tls.DialWithDialer(dialer, "tcp", addr, cfg)
 		if err != nil {
