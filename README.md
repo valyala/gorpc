@@ -38,7 +38,7 @@ Usage
 
 Server:
 ```go
-s := &Server{
+s := &gorpc.Server{
 	// Accept clients on this TCP address.
 	Addr: ":12345",
 
@@ -55,7 +55,7 @@ if err := s.Serve(); err != nil {
 
 Client:
 ```go
-c := &Client{
+c := &gorpc.Client{
 	// TCP address of the server.
 	Addr: "rpc.server.addr:12345",
 }
@@ -70,9 +70,23 @@ if resp.(string) != "foobar" {
 	log.Fatalf("Unexpected response from the server: %+v", resp)
 }
 
-// Non-blocking request send
+// Non-blocking 'fire and forget' calls
 for i := 0; i < 10; i++ {
 	c.Send(i)
+}
+
+// Async call. Fire 10 simultaneous calls, then wait for results.
+var results [10]gorpc.AsyncResult
+for i := 0; i < 10; i++ {
+	results[i] = c.CallAsync(i)
+}
+for i := 0; i < 10; i++ {
+	r := results[i]
+	<-r.Done
+	if r.Error != nil {
+		log.Fatalf("Error on request %d: [%s]", i, r.Error)
+	}
+	log.Printf("Response %d=%v\n", i, r.Response)
 }
 ```
 
