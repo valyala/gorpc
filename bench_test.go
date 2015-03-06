@@ -49,6 +49,7 @@ func simulateRealApp(b *testing.B, workersCount int) {
 	defer s.Stop()
 
 	c := NewTCPClient(addr)
+	c.Conns = runtime.GOMAXPROCS(-1)
 	c.PendingRequests = workersCount
 	c.Start()
 	defer c.Stop()
