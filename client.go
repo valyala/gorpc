@@ -358,7 +358,7 @@ func clientHandleConnection(c *Client, conn io.ReadWriteCloser) {
 	}
 	for _, m := range pendingRequests {
 		m.Error = err
-		close(m.Done)
+		m.Done <- struct{}{}
 	}
 }
 
@@ -372,7 +372,9 @@ type clientMessage struct {
 var (
 	clientMessagePool = &sync.Pool{
 		New: func() interface{} {
-			return &clientMessage{}
+			return &clientMessage{
+				Done: make(chan struct{}, 1),
+			}
 		},
 	}
 
@@ -384,7 +386,6 @@ func newClientMessage(request interface{}) *clientMessage {
 	m.Request = request
 	m.Response = nil
 	m.Error = nil
-	m.Done = make(chan struct{})
 	return m
 }
 
@@ -496,6 +497,6 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 		}
 
 		m.Response = wm.Data
-		close(m.Done)
+		m.Done <- struct{}{}
 	}
 }
