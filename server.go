@@ -232,6 +232,12 @@ type serverMessage struct {
 	ClientAddr string
 }
 
+var serverMessagePool = &sync.Pool{
+	New: func() interface{} {
+		return &serverMessage{}
+	},
+}
+
 func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
 	defer func() { close(done) }()
 
@@ -239,17 +245,17 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 	defer d.Close()
 
 	for {
-		var m wireMessage
-		if err := d.Decode(&m); err != nil {
+		var wm wireMessage
+		if err := d.Decode(&wm); err != nil {
 			logError("gorpc.Server: [%s]->[%s]. Cannot decode request: [%s]", clientAddr, s.Addr, err)
 			return
 		}
-		rpcM := &serverMessage{
-			ID:         m.ID,
-			Request:    m.Data,
-			ClientAddr: clientAddr,
-		}
-		go serveRequest(s, responsesChan, stopChan, rpcM)
+		m := serverMessagePool.Get().(*serverMessage)
+		m.ID = wm.ID
+		m.Request = wm.Data
+		m.Response = nil
+		m.ClientAddr = clientAddr
+		go serveRequest(s, responsesChan, stopChan, m)
 	}
 }
 
@@ -294,17 +300,17 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 	close(closedFlushChan)
 
 	for {
-		var rpcM *serverMessage
+		var m *serverMessage
 
 		select {
 		case <-stopChan:
 			return
-		case rpcM = <-responsesChan:
+		case m = <-responsesChan:
 		default:
 			select {
 			case <-stopChan:
 				return
-			case rpcM = <-responsesChan:
+			case m = <-responsesChan:
 			case <-flushChan:
 				if err := e.Flush(); err != nil {
 					logError("gorpc.Server: [%s]->[%s]: Cannot flush responses to underlying stream: [%s]", clientAddr, s.Addr, err)
@@ -324,11 +330,12 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 			}
 		}
 
-		m := wireMessage{
-			ID:   rpcM.ID,
-			Data: rpcM.Response,
+		wm := wireMessage{
+			ID:   m.ID,
+			Data: m.Response,
 		}
-		if err := e.Encode(&m); err != nil {
+		serverMessagePool.Put(m)
+		if err := e.Encode(wm); err != nil {
 			logError("gorpc.Server: [%s]->[%s]. Cannot send response to wire: [%s]", clientAddr, s.Addr, err)
 			return
 		}

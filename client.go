@@ -163,16 +163,17 @@ func (c *Client) Call(request interface{}) (response interface{}, err error) {
 //
 // Don't forget starting the client with Client.Start() before calling Client.Call().
 func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (response interface{}, err error) {
-	m := clientMessage{
-		Request: request,
-		Done:    make(chan struct{}),
-	}
+	m := newClientMessage(request)
+
 	select {
-	case c.requestsChan <- &m:
+	case c.requestsChan <- m:
 		select {
 		case <-m.Done:
-			return m.Response, m.Error
+			response, err = m.Response, m.Error
+			clientMessagePool.Put(m)
+			return
 		case <-time.After(timeout):
+			registerPendingClientMessage(m)
 			err := fmt.Errorf("gorpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
 			logError("%s", err)
 			return nil, &ClientError{
@@ -181,6 +182,7 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 			}
 		}
 	default:
+		clientMessagePool.Put(m)
 		err := fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
 		logError("%s", err)
 		return nil, &ClientError{
@@ -203,13 +205,13 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 //
 // Don't forget starting the client with Client.Start() before calling Client.Send().
 func (c *Client) Send(request interface{}) {
-	m := clientMessage{
-		Request: request,
-		Done:    make(chan struct{}),
-	}
+	m := newClientMessage(request)
+
 	select {
-	case c.requestsChan <- &m:
+	case c.requestsChan <- m:
+		registerPendingClientMessage(m)
 	default:
+		clientMessagePool.Put(m)
 		logError("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
 	}
 }
@@ -363,8 +365,45 @@ func clientHandleConnection(c *Client, conn io.ReadWriteCloser) {
 type clientMessage struct {
 	Request  interface{}
 	Response interface{}
-	Done     chan struct{}
 	Error    error
+	Done     chan struct{}
+}
+
+var (
+	clientMessagePool = &sync.Pool{
+		New: func() interface{} {
+			return &clientMessage{}
+		},
+	}
+
+	pendingClientMessages = make(chan *clientMessage)
+)
+
+func newClientMessage(request interface{}) *clientMessage {
+	m := clientMessagePool.Get().(*clientMessage)
+	m.Request = request
+	m.Response = nil
+	m.Error = nil
+	m.Done = make(chan struct{})
+	return m
+}
+
+func registerPendingClientMessage(m *clientMessage) {
+	select {
+	case pendingClientMessages <- m:
+	default:
+	}
+}
+
+func init() {
+	go pendingClientMessageCleaner()
+}
+
+func pendingClientMessageCleaner() {
+	for m := range pendingClientMessages {
+		<-m.Done
+		clientMessagePool.Put(m)
+	}
 }
 
 func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMessage, pendingRequestsLock *sync.Mutex, stopChan <-chan struct{}, done chan<- error) {
@@ -382,17 +421,17 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 
 	var msgID uint64
 	for {
-		var rpcM *clientMessage
+		var m *clientMessage
 
 		select {
 		case <-stopChan:
 			return
-		case rpcM = <-c.requestsChan:
+		case m = <-c.requestsChan:
 		default:
 			select {
 			case <-stopChan:
 				return
-			case rpcM = <-c.requestsChan:
+			case m = <-c.requestsChan:
 			case <-flushChan:
 				if err := e.Flush(); err != nil {
 					err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush requests to underlying stream: [%s]", c.Addr, err)
@@ -414,7 +453,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 		msgID++
 		pendingRequestsLock.Lock()
 		n := len(pendingRequests)
-		pendingRequests[msgID] = rpcM
+		pendingRequests[msgID] = m
 		pendingRequestsLock.Unlock()
 
 		if n > 10*c.PendingRequests {
@@ -422,11 +461,11 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			return
 		}
 
-		m := wireMessage{
+		wm := wireMessage{
 			ID:   msgID,
-			Data: rpcM.Request,
+			Data: m.Request,
 		}
-		if err := e.Encode(&m); err != nil {
+		if err := e.Encode(wm); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
 			return
 		}
@@ -441,22 +480,22 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 	defer d.Close()
 
 	for {
-		var m wireMessage
-		if err := d.Decode(&m); err != nil {
+		var wm wireMessage
+		if err := d.Decode(&wm); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot decode response: [%s]", c.Addr, err)
 			return
 		}
 
 		pendingRequestsLock.Lock()
-		rpcM, ok := pendingRequests[m.ID]
-		delete(pendingRequests, m.ID)
+		m, ok := pendingRequests[wm.ID]
+		delete(pendingRequests, wm.ID)
 		pendingRequestsLock.Unlock()
 		if !ok {
-			err = fmt.Errorf("gorpc.Client: [%s]. Unexpected msgID=[%d] obtained from server", c.Addr, m.ID)
+			err = fmt.Errorf("gorpc.Client: [%s]. Unexpected msgID=[%d] obtained from server", c.Addr, wm.ID)
 			return
 		}
 
-		rpcM.Response = m.Data
-		close(rpcM.Done)
+		m.Response = wm.Data
+		close(m.Done)
 	}
 }
