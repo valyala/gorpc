@@ -421,12 +421,8 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 	e := newMessageEncoder(w, c.SendBufferSize, !c.DisableCompression, &c.Stats)
 	defer e.Close()
 
-	var (
-		flushChan       <-chan time.Time
-		closedFlushChan = make(chan time.Time)
-	)
-	close(closedFlushChan)
-
+	t := time.NewTimer(c.FlushDelay)
+	var flushChan <-chan time.Time
 	var msgID uint64
 	for {
 		var m *clientMessage
@@ -451,11 +447,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 		}
 
 		if flushChan == nil {
-			if c.FlushDelay > 0 {
-				flushChan = time.After(c.FlushDelay)
-			} else {
-				flushChan = closedFlushChan
-			}
+			flushChan = getFlushChan(t, c.FlushDelay)
 		}
 
 		msgID++

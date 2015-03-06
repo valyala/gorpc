@@ -65,3 +65,25 @@ func releaseTimer(t *time.Timer) {
 
 	timerPool.Put(t)
 }
+
+var closedFlushChan = make(chan time.Time)
+
+func init() {
+	close(closedFlushChan)
+}
+
+func getFlushChan(t *time.Timer, flushDelay time.Duration) <-chan time.Time {
+	if flushDelay <= 0 {
+		return closedFlushChan
+	}
+
+	if !t.Stop() {
+		// Exhaust expired timer's chan.
+		select {
+		case <-t.C:
+		default:
+		}
+	}
+	t.Reset(flushDelay)
+	return t.C
+}

@@ -296,12 +296,8 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 	e := newMessageEncoder(w, s.SendBufferSize, enabledCompression, &s.Stats)
 	defer e.Close()
 
-	var (
-		flushChan       <-chan time.Time
-		closedFlushChan = make(chan time.Time)
-	)
-	close(closedFlushChan)
-
+	var flushChan <-chan time.Time
+	t := time.NewTimer(s.FlushDelay)
 	for {
 		var m *serverMessage
 
@@ -326,11 +322,7 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 		}
 
 		if flushChan == nil {
-			if s.FlushDelay > 0 {
-				flushChan = time.After(s.FlushDelay)
-			} else {
-				flushChan = closedFlushChan
-			}
+			flushChan = getFlushChan(t, s.FlushDelay)
 		}
 
 		wm := acquireWireMessage()
