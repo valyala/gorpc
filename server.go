@@ -244,8 +244,9 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 	d := newMessageDecoder(r, s.RecvBufferSize, enabledCompression, &s.Stats)
 	defer d.Close()
 
+	wm := &wireMessage{}
 	for {
-		wm := acquireWireMessage()
+		wm.Data = nil
 		if err := d.Decode(wm); err != nil {
 			logError("gorpc.Server: [%s]->[%s]. Cannot decode request: [%s]", clientAddr, s.Addr, err)
 			return
@@ -256,7 +257,6 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 		m.Request = wm.Data
 		m.Response = nil
 		m.ClientAddr = clientAddr
-		releaseWireMessage(wm)
 
 		go serveRequest(s, responsesChan, stopChan, m)
 	}
@@ -298,6 +298,7 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 
 	var flushChan <-chan time.Time
 	t := time.NewTimer(s.FlushDelay)
+	wm := &wireMessage{}
 	for {
 		var m *serverMessage
 
@@ -325,7 +326,6 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 			flushChan = getFlushChan(t, s.FlushDelay)
 		}
 
-		wm := acquireWireMessage()
 		wm.ID = m.ID
 		wm.Data = m.Response
 
@@ -339,6 +339,5 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 			logError("gorpc.Server: [%s]->[%s]. Cannot send response to wire: [%s]", clientAddr, s.Addr, err)
 			return
 		}
-		releaseWireMessage(wm)
 	}
 }
