@@ -5,7 +5,6 @@ import (
 	"compress/flate"
 	"encoding/gob"
 	"io"
-	"sync"
 )
 
 // RegisterType registers the given type to send via rpc.
@@ -22,22 +21,6 @@ func RegisterType(x interface{}) {
 type wireMessage struct {
 	ID   uint64
 	Data interface{}
-}
-
-var wireMessagePool = &sync.Pool{
-	New: func() interface{} {
-		return &wireMessage{}
-	},
-}
-
-func acquireWireMessage() *wireMessage {
-	return wireMessagePool.Get().(*wireMessage)
-}
-
-func releaseWireMessage(wm *wireMessage) {
-	wm.ID = 0
-	wm.Data = nil
-	wireMessagePool.Put(wm)
 }
 
 type messageEncoder struct {
