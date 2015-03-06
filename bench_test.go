@@ -261,7 +261,7 @@ func benchEchoStruct(b *testing.B, workers int, disableCompression, isUnixTransp
 }
 
 func benchEchoFunc(b *testing.B, workers int, disableCompression, isUnixTransport bool, f func(*Client, int)) {
-	s, c := createEchoServerAndClient(b, disableCompression, b.N, isUnixTransport)
+	s, c := createEchoServerAndClient(b, disableCompression, workers, isUnixTransport)
 	defer s.Stop()
 	defer c.Stop()
 
