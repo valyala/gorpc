@@ -380,7 +380,7 @@ var (
 		},
 	}
 
-	pendingClientMessages = make(chan *clientMessage)
+	pendingClientMessages = make(chan *clientMessage, 128*1024)
 )
 
 func acquireClientMessage(request interface{}) *clientMessage {
