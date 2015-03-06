@@ -164,6 +164,7 @@ func (c *Client) Call(request interface{}) (response interface{}, err error) {
 // Don't forget starting the client with Client.Start() before calling Client.Call().
 func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (response interface{}, err error) {
 	m := acquireClientMessage(request)
+	t := acquireTimer(timeout)
 
 	select {
 	case c.requestsChan <- m:
@@ -171,25 +172,26 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 		case <-m.Done:
 			response, err = m.Response, m.Error
 			releaseClientMessage(m)
-			return
-		case <-time.After(timeout):
+		case <-t.C:
 			registerPendingClientMessage(m)
-			err := fmt.Errorf("gorpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
+			err = fmt.Errorf("gorpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
 			logError("%s", err)
-			return nil, &ClientError{
+			err = &ClientError{
 				Timeout: true,
 				err:     err,
 			}
 		}
 	default:
 		releaseClientMessage(m)
-		err := fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
+		err = fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
 		logError("%s", err)
-		return nil, &ClientError{
+		err = &ClientError{
 			Overflow: true,
 			err:      err,
 		}
 	}
+	releaseTimer(t)
+	return
 }
 
 // Send sends the given request to the server and doesn't wait for response.
