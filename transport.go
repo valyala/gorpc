@@ -160,8 +160,8 @@ func NewUnixClient(addr string) *Client {
 		// over local unix sockets.
 		DisableCompression: true,
 
-		// Sacrifice the number of Write() calls by smallest possible
-		// latency, since it has higher priority in local IPC.
+		// Sacrifice the number of Write() calls to the smallest
+		// possible latency, since it has higher priority in local IPC.
 		FlushDelay: -1,
 	}
 }
@@ -183,8 +183,8 @@ func NewUnixServer(addr string, handler HandlerFunc) *Server {
 			},
 		},
 
-		// Sacrifice the number of Write() calls by smallest possible
-		// latency, since it has higher priority in local IPC.
+		// Sacrifice the number of Write() calls to the smallest
+		// possible latency, since it has higher priority in local IPC.
 		FlushDelay: -1,
 	}
 }
