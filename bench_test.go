@@ -3,7 +3,6 @@ package gorpc
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"math/rand"
 	"runtime"
 	"sync"
