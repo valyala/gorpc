@@ -481,8 +481,8 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 	defer d.Close()
 
 	for {
-		var wm wireMessage
-		if err := d.Decode(&wm); err != nil {
+		wm := wireMessagePool.Get().(*wireMessage)
+		if err := d.Decode(wm); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot decode response: [%s]", c.Addr, err)
 			return
 		}
@@ -497,6 +497,7 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 		}
 
 		m.Response = wm.Data
+		wireMessagePool.Put(wm)
 		m.Done <- struct{}{}
 	}
 }

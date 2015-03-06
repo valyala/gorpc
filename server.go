@@ -245,16 +245,20 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 	defer d.Close()
 
 	for {
-		var wm wireMessage
-		if err := d.Decode(&wm); err != nil {
+		wm := wireMessagePool.Get().(*wireMessage)
+		if err := d.Decode(wm); err != nil {
 			logError("gorpc.Server: [%s]->[%s]. Cannot decode request: [%s]", clientAddr, s.Addr, err)
 			return
 		}
+
 		m := serverMessagePool.Get().(*serverMessage)
 		m.ID = wm.ID
 		m.Request = wm.Data
 		m.Response = nil
 		m.ClientAddr = clientAddr
+
+		wireMessagePool.Put(wm)
+
 		go serveRequest(s, responsesChan, stopChan, m)
 	}
 }
