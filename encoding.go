@@ -7,6 +7,22 @@ import (
 	"io"
 )
 
+// RegisterType registers the given type to send via rpc.
+//
+// The client must register all the response types the server may send.
+// The server must register all the request types the client may send.
+//
+// There is no need in registering base Go types such as int, string, bool,
+// float64, etc. or arrays, slices and maps containing base Go types.
+func RegisterType(x interface{}) {
+	gob.Register(x)
+}
+
+type wireMessage struct {
+	ID   uint64
+	Data interface{}
+}
+
 type messageEncoder struct {
 	e  *gob.Encoder
 	bw *bufio.Writer
