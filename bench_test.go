@@ -3,11 +3,104 @@ package gorpc
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"math/rand"
 	"runtime"
 	"sync"
 	"testing"
+	"time"
 )
+
+func BenchmarkRealApp1Worker(b *testing.B) {
+	simulateRealApp(b, 1)
+}
+
+func BenchmarkRealApp10Workers(b *testing.B) {
+	simulateRealApp(b, 10)
+}
+
+func BenchmarkRealApp100Workers(b *testing.B) {
+	simulateRealApp(b, 100)
+}
+
+func BenchmarkRealApp1000Workers(b *testing.B) {
+	simulateRealApp(b, 1000)
+}
+
+func BenchmarkRealApp10000Workers(b *testing.B) {
+	simulateRealApp(b, 10000)
+}
+
+func BenchmarkRealApp100000Workers(b *testing.B) {
+	simulateRealApp(b, 100000)
+}
+
+func doRealWork() {
+	time.Sleep(time.Duration(5+rand.Intn(10)) * time.Millisecond)
+}
+
+func simulateRealApp(b *testing.B, workersCount int) {
+	addr := ":43245"
+	s := NewTCPServer(addr, func(clientAddr string, request interface{}) interface{} {
+		doRealWork()
+		return request
+	})
+	s.PendingResponses = workersCount
+	s.Start()
+	defer s.Stop()
+
+	c := NewTCPClient(addr)
+	c.PendingRequests = workersCount
+	c.Start()
+	defer c.Stop()
+
+	ch := make(chan int, b.N)
+	for i := 0; i < b.N; i++ {
+		ch <- i
+	}
+
+	type realMessage struct {
+		FooString string
+		FooInt    int
+		Map       map[string]string
+		Bytes     []byte
+	}
+	RegisterType(&realMessage{})
+
+	b.ResetTimer()
+	var wg sync.WaitGroup
+	for i := 0; i < workersCount; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for n := range ch {
+				doRealWork()
+				req := &realMessage{
+					FooString: fmt.Sprintf("aaa bbb ccc %d", n),
+					FooInt:    n,
+					Map: map[string]string{
+						"aaa": "bbb",
+						"xxx": fmt.Sprintf("cvv%d", n+4),
+					},
+					Bytes: []byte(",.zssdsdkl23 23"),
+				}
+				resp, err := c.Call(req)
+				if err != nil {
+					b.Fatalf("Unexpected response error: [%s]", err)
+				}
+				x, ok := resp.(*realMessage)
+				if !ok {
+					b.Fatalf("Unexpected response type %T", resp)
+				}
+				if x.FooString != req.FooString || x.FooInt != req.FooInt || x.Map["aaa"] != req.Map["aaa"] || x.Map["xxx"] != req.Map["xxx"] || !bytes.Equal(x.Bytes, req.Bytes) {
+					b.Fatalf("Unexpected response value %v. Expected %v", x, req)
+				}
+			}
+		}()
+	}
+	close(ch)
+	wg.Wait()
+}
 
 func BenchmarkEchoInt1Worker(b *testing.B) {
 	benchEchoInt(b, 1, false, false)
