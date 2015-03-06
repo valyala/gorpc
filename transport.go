@@ -182,6 +182,10 @@ func NewUnixServer(addr string, handler HandlerFunc) *Server {
 				return net.Listen("unix", addr)
 			},
 		},
+
+		// Sacrifice the number of Write() calls by smallest possible
+		// latency, since it has higher priority in local IPC.
+		FlushDelay: -1,
 	}
 }
 
