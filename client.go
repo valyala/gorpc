@@ -404,6 +404,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 	t := time.NewTimer(c.FlushDelay)
 	var flushChan <-chan time.Time
 	var msgID uint64
+	var wm wireMessage
 	for {
 		var m *clientMessage
 
@@ -441,14 +442,12 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			return
 		}
 
-		wm := acquireWireMessage()
 		wm.ID = msgID
 		wm.Data = m.Request
 		if err := e.Encode(wm); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
 			return
 		}
-		releaseWireMessage(wm)
 	}
 }
 
@@ -459,9 +458,9 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 	d := newMessageDecoder(r, c.RecvBufferSize, !c.DisableCompression, &c.Stats)
 	defer d.Close()
 
+	var wm wireMessage
 	for {
-		wm := acquireWireMessage()
-		if err := d.Decode(wm); err != nil {
+		if err := d.Decode(&wm); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot decode response: [%s]", c.Addr, err)
 			return
 		}
@@ -477,7 +476,7 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 		}
 
 		m.Response = wm.Data
-		releaseWireMessage(wm)
+		wm.Data = 0
 		m.Done <- struct{}{}
 	}
 }
