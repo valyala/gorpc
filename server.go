@@ -11,7 +11,7 @@ import (
 
 // HandlerFunc is a server handler function.
 //
-// clientAddr contains client address returned by net.Conn.RemoteAddr().
+// clientAddr contains client address returned by Listener.Accept().
 // Request and response types may be arbitrary.
 // All the request types the client may send to the server must be registered
 // with gorpc.RegisterType() before starting the server.
