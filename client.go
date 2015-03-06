@@ -173,7 +173,6 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 			response, err = m.Response, m.Error
 			releaseClientMessage(m)
 		case <-t.C:
-			registerPendingClientMessage(m)
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
 			logError("%s", err)
 			err = &ClientError{
@@ -207,13 +206,14 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 //
 // Don't forget starting the client with Client.Start() before calling Client.Send().
 func (c *Client) Send(request interface{}) {
-	m := acquireClientMessage(request)
+	m := &clientMessage{
+		Request: request,
+		Done:    make(chan struct{}, 1),
+	}
 
 	select {
 	case c.requestsChan <- m:
-		registerPendingClientMessage(m)
 	default:
-		releaseClientMessage(m)
 		logError("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
 	}
 }
@@ -371,20 +371,18 @@ type clientMessage struct {
 	Done     chan struct{}
 }
 
-var (
-	clientMessagePool = &sync.Pool{
-		New: func() interface{} {
-			return &clientMessage{
-				Done: make(chan struct{}, 1),
-			}
-		},
-	}
-
-	pendingClientMessages = make(chan *clientMessage, 128*1024)
-)
+var clientMessagePool sync.Pool
 
 func acquireClientMessage(request interface{}) *clientMessage {
-	m := clientMessagePool.Get().(*clientMessage)
+	mv := clientMessagePool.Get()
+	if mv == nil {
+		return &clientMessage{
+			Request: request,
+			Done:    make(chan struct{}, 1),
+		}
+	}
+
+	m := mv.(*clientMessage)
 	m.Request = request
 	return m
 }
@@ -394,24 +392,6 @@ func releaseClientMessage(m *clientMessage) {
 	m.Response = nil
 	m.Error = nil
 	clientMessagePool.Put(m)
-}
-
-func registerPendingClientMessage(m *clientMessage) {
-	select {
-	case pendingClientMessages <- m:
-	default:
-	}
-}
-
-func init() {
-	go pendingClientMessageCleaner()
-}
-
-func pendingClientMessageCleaner() {
-	for m := range pendingClientMessages {
-		<-m.Done
-		releaseClientMessage(m)
-	}
 }
 
 func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMessage, pendingRequestsLock *sync.Mutex, stopChan <-chan struct{}, done chan<- error) {
