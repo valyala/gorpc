@@ -170,7 +170,7 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 		select {
 		case <-m.Done:
 			response, err = m.Response, m.Error
-			clientMessagePool.Put(m)
+			releaseClientMessage(m)
 			return
 		case <-time.After(timeout):
 			registerPendingClientMessage(m)
@@ -182,7 +182,7 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 			}
 		}
 	default:
-		clientMessagePool.Put(m)
+		releaseClientMessage(m)
 		err := fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
 		logError("%s", err)
 		return nil, &ClientError{
@@ -211,7 +211,7 @@ func (c *Client) Send(request interface{}) {
 	case c.requestsChan <- m:
 		registerPendingClientMessage(m)
 	default:
-		clientMessagePool.Put(m)
+		releaseClientMessage(m)
 		logError("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
 	}
 }
@@ -384,9 +384,14 @@ var (
 func newClientMessage(request interface{}) *clientMessage {
 	m := clientMessagePool.Get().(*clientMessage)
 	m.Request = request
+	return m
+}
+
+func releaseClientMessage(m *clientMessage) {
+	m.Request = nil
 	m.Response = nil
 	m.Error = nil
-	return m
+	clientMessagePool.Put(m)
 }
 
 func registerPendingClientMessage(m *clientMessage) {
@@ -403,7 +408,7 @@ func init() {
 func pendingClientMessageCleaner() {
 	for m := range pendingClientMessages {
 		<-m.Done
-		clientMessagePool.Put(m)
+		releaseClientMessage(m)
 	}
 }
 
@@ -462,14 +467,14 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			return
 		}
 
-		wm := wireMessage{
-			ID:   msgID,
-			Data: m.Request,
-		}
+		wm := newWireMessage()
+		wm.ID = msgID
+		wm.Data = m.Request
 		if err := e.Encode(wm); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
 			return
 		}
+		releaseWireMessage(wm)
 	}
 }
 
@@ -481,7 +486,7 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 	defer d.Close()
 
 	for {
-		wm := wireMessagePool.Get().(*wireMessage)
+		wm := newWireMessage()
 		if err := d.Decode(wm); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot decode response: [%s]", c.Addr, err)
 			return
@@ -491,13 +496,14 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 		m, ok := pendingRequests[wm.ID]
 		delete(pendingRequests, wm.ID)
 		pendingRequestsLock.Unlock()
+
 		if !ok {
 			err = fmt.Errorf("gorpc.Client: [%s]. Unexpected msgID=[%d] obtained from server", c.Addr, wm.ID)
 			return
 		}
 
 		m.Response = wm.Data
-		wireMessagePool.Put(wm)
+		releaseWireMessage(wm)
 		m.Done <- struct{}{}
 	}
 }

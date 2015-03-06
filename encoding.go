@@ -30,6 +30,16 @@ var wireMessagePool = &sync.Pool{
 	},
 }
 
+func newWireMessage() *wireMessage {
+	return wireMessagePool.Get().(*wireMessage)
+}
+
+func releaseWireMessage(wm *wireMessage) {
+	wm.ID = 0
+	wm.Data = nil
+	wireMessagePool.Put(wm)
+}
+
 type messageEncoder struct {
 	e  *gob.Encoder
 	bw *bufio.Writer
