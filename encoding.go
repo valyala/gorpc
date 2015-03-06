@@ -30,7 +30,7 @@ var wireMessagePool = &sync.Pool{
 	},
 }
 
-func newWireMessage() *wireMessage {
+func acquireWireMessage() *wireMessage {
 	return wireMessagePool.Get().(*wireMessage)
 }
 

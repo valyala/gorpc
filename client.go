@@ -163,7 +163,7 @@ func (c *Client) Call(request interface{}) (response interface{}, err error) {
 //
 // Don't forget starting the client with Client.Start() before calling Client.Call().
 func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (response interface{}, err error) {
-	m := newClientMessage(request)
+	m := acquireClientMessage(request)
 
 	select {
 	case c.requestsChan <- m:
@@ -205,7 +205,7 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 //
 // Don't forget starting the client with Client.Start() before calling Client.Send().
 func (c *Client) Send(request interface{}) {
-	m := newClientMessage(request)
+	m := acquireClientMessage(request)
 
 	select {
 	case c.requestsChan <- m:
@@ -381,7 +381,7 @@ var (
 	pendingClientMessages = make(chan *clientMessage)
 )
 
-func newClientMessage(request interface{}) *clientMessage {
+func acquireClientMessage(request interface{}) *clientMessage {
 	m := clientMessagePool.Get().(*clientMessage)
 	m.Request = request
 	return m
@@ -467,7 +467,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			return
 		}
 
-		wm := newWireMessage()
+		wm := acquireWireMessage()
 		wm.ID = msgID
 		wm.Data = m.Request
 		if err := e.Encode(wm); err != nil {
@@ -486,7 +486,7 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 	defer d.Close()
 
 	for {
-		wm := newWireMessage()
+		wm := acquireWireMessage()
 		if err := d.Decode(wm); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot decode response: [%s]", c.Addr, err)
 			return

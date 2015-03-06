@@ -245,7 +245,7 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 	defer d.Close()
 
 	for {
-		wm := newWireMessage()
+		wm := acquireWireMessage()
 		if err := d.Decode(wm); err != nil {
 			logError("gorpc.Server: [%s]->[%s]. Cannot decode request: [%s]", clientAddr, s.Addr, err)
 			return
@@ -333,7 +333,7 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 			}
 		}
 
-		wm := newWireMessage()
+		wm := acquireWireMessage()
 		wm.ID = m.ID
 		wm.Data = m.Response
 
