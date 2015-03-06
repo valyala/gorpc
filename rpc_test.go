@@ -223,7 +223,7 @@ func TestServerStuck(t *testing.T) {
 			timeoutErrors++
 		} else if ce.Connection {
 			stuckErrors++
-		} else {
+		} else if !ce.Overflow {
 			t.Fatalf("Unexpected error returned: [%s]", ce)
 		}
 		if r.Response != nil {
