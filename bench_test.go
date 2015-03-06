@@ -39,25 +39,16 @@ func doRealWork() {
 }
 
 func simulateRealApp(b *testing.B, workersCount int) {
-	addr := ":43245"
+	addr := fmt.Sprintf(":%d", rand.Intn(20000)+10000)
 	s := NewTCPServer(addr, func(clientAddr string, request interface{}) interface{} {
 		doRealWork()
 		return request
 	})
 	s.PendingResponses = workersCount
-	s.Start()
-	defer s.Stop()
 
 	c := NewTCPClient(addr)
 	c.Conns = runtime.GOMAXPROCS(-1)
 	c.PendingRequests = workersCount
-	c.Start()
-	defer c.Stop()
-
-	ch := make(chan int, b.N)
-	for i := 0; i < b.N; i++ {
-		ch <- i
-	}
 
 	type realMessage struct {
 		FooString string
@@ -67,39 +58,29 @@ func simulateRealApp(b *testing.B, workersCount int) {
 	}
 	RegisterType(&realMessage{})
 
-	b.ResetTimer()
-	var wg sync.WaitGroup
-	for i := 0; i < workersCount; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for n := range ch {
-				doRealWork()
-				req := &realMessage{
-					FooString: fmt.Sprintf("aaa bbb ccc %d", n),
-					FooInt:    n,
-					Map: map[string]string{
-						"aaa": "bbb",
-						"xxx": fmt.Sprintf("cvv%d", n+4),
-					},
-					Bytes: []byte(",.zssdsdkl23 23"),
-				}
-				resp, err := c.Call(req)
-				if err != nil {
-					b.Fatalf("Unexpected response error: [%s]", err)
-				}
-				x, ok := resp.(*realMessage)
-				if !ok {
-					b.Fatalf("Unexpected response type %T", resp)
-				}
-				if x.FooString != req.FooString || x.FooInt != req.FooInt || x.Map["aaa"] != req.Map["aaa"] || x.Map["xxx"] != req.Map["xxx"] || !bytes.Equal(x.Bytes, req.Bytes) {
-					b.Fatalf("Unexpected response value %v. Expected %v", x, req)
-				}
-			}
-		}()
-	}
-	close(ch)
-	wg.Wait()
+	benchClientServer(b, workersCount, c, s, func(c *Client, n int) {
+		doRealWork()
+		req := &realMessage{
+			FooString: fmt.Sprintf("aaa bbb ccc %d", n),
+			FooInt:    n,
+			Map: map[string]string{
+				"aaa": "bbb",
+				"xxx": fmt.Sprintf("cvv%d", n+4),
+			},
+			Bytes: []byte(",.zssdsdkl23 23"),
+		}
+		resp, err := c.Call(req)
+		if err != nil {
+			b.Fatalf("Unexpected response error: [%s]", err)
+		}
+		x, ok := resp.(*realMessage)
+		if !ok {
+			b.Fatalf("Unexpected response type %T", resp)
+		}
+		if x.FooString != req.FooString || x.FooInt != req.FooInt || x.Map["aaa"] != req.Map["aaa"] || x.Map["xxx"] != req.Map["xxx"] || !bytes.Equal(x.Bytes, req.Bytes) {
+			b.Fatalf("Unexpected response value %v. Expected %v", x, req)
+		}
+	})
 }
 
 func BenchmarkEchoInt1Worker(b *testing.B) {
@@ -355,6 +336,15 @@ func benchEchoStruct(b *testing.B, workers int, disableCompression, isUnixTransp
 
 func benchEchoFunc(b *testing.B, workers int, disableCompression, isUnixTransport bool, f func(*Client, int)) {
 	s, c := createEchoServerAndClient(b, disableCompression, workers, isUnixTransport)
+	benchClientServer(b, workers, c, s, f)
+}
+
+func benchClientServer(b *testing.B, workers int, c *Client, s *Server, f func(*Client, int)) {
+	if err := s.Start(); err != nil {
+		b.Fatalf("Cannot start gorpc server: [%s]", err)
+	}
+	c.Start()
+
 	defer s.Stop()
 	defer c.Stop()
 
@@ -399,14 +389,9 @@ func createEchoServerAndClient(b *testing.B, disableCompression bool, pendingMes
 		}
 	}
 
-	if err := s.Start(); err != nil {
-		b.Fatalf("Cannot start gorpc server: [%s]", err)
-	}
-
 	c.Conns = runtime.GOMAXPROCS(-1)
 	c.DisableCompression = disableCompression
 	c.PendingRequests = pendingMessages
-	c.Start()
 
 	return s, c
 }
