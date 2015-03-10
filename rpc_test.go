@@ -485,6 +485,26 @@ func TestSend(t *testing.T) {
 	wg.Wait()
 }
 
+func TestMixedCallSend(t *testing.T) {
+	addr := getRandomAddr()
+	s := NewTCPServer(addr, echoHandler)
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := NewTCPClient(addr)
+	c.Start()
+	defer c.Stop()
+
+	for i := 0; i < 2; i++ {
+		for i := 0; i < 100; i++ {
+			c.Send("123211")
+		}
+		testIntClient(t, c)
+	}
+}
+
 func TestCallAsync(t *testing.T) {
 	addr := getRandomAddr()
 	s := &Server{
