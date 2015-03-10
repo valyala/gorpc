@@ -303,8 +303,6 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 		var m *serverMessage
 
 		select {
-		case <-stopChan:
-			return
 		case m = <-responsesChan:
 		default:
 			select {

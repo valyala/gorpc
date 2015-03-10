@@ -415,8 +415,6 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 		var m *clientMessage
 
 		select {
-		case <-stopChan:
-			return
 		case m = <-c.requestsChan:
 		default:
 			select {
