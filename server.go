@@ -336,5 +336,6 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 			return
 		}
 		wm.Data = nil
+		atomic.AddUint64(&s.Stats.RpcCalls, 1)
 	}
 }

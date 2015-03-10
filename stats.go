@@ -8,6 +8,9 @@ import (
 // ConnStats provides connection statistics. Applied to both gorpc.Client
 // and gorpc.Server.
 type ConnStats struct {
+	// The number of rpc calls performed.
+	RpcCalls uint64
+
 	// The number of bytes written to the underlying connections.
 	BytesWritten uint64
 
