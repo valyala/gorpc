@@ -337,5 +337,6 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 			logError("gorpc.Server: [%s]->[%s]. Cannot send response to wire: [%s]", clientAddr, s.Addr, err)
 			return
 		}
+		wm.Data = nil
 	}
 }

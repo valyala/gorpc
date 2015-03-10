@@ -452,6 +452,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
 			return
 		}
+		wm.Data = nil
 	}
 }
 
@@ -480,7 +481,7 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 		}
 
 		m.Response = wm.Data
-		wm.Data = 0
+		wm.Data = nil
 		m.Done <- struct{}{}
 	}
 }
