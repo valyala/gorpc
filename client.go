@@ -176,7 +176,10 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 		select {
 		case <-m.Done:
 			response, err = m.Response, m.Error
-			releaseClientMessage(m)
+
+			m.Response = nil
+			m.Error = nil
+			clientMessagePool.Put(m)
 		case <-t.C:
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
 			logError("%s", err)
@@ -186,7 +189,9 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 			}
 		}
 	default:
-		releaseClientMessage(m)
+		m.Request = nil
+		clientMessagePool.Put(m)
+
 		err = fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
 		logError("%s", err)
 		err = &ClientError{
@@ -393,13 +398,6 @@ func acquireClientMessage(request interface{}) *clientMessage {
 	return m
 }
 
-func releaseClientMessage(m *clientMessage) {
-	m.Request = nil
-	m.Response = nil
-	m.Error = nil
-	clientMessagePool.Put(m)
-}
-
 func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMessage, pendingRequestsLock *sync.Mutex, stopChan <-chan struct{}, done chan<- error) {
 	var err error
 	defer func() { done <- err }()
@@ -448,6 +446,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 
 		wm.ID = msgID
 		wm.Data = m.Request
+		m.Request = nil
 		if err := e.Encode(wm); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
 			return

@@ -254,7 +254,6 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 		m := serverMessagePool.Get().(*serverMessage)
 		m.ID = wm.ID
 		m.Request = wm.Data
-		m.Response = nil
 		m.ClientAddr = clientAddr
 		wm.Data = nil
 
@@ -263,7 +262,9 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 }
 
 func serveRequest(s *Server, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, m *serverMessage) {
-	m.Response = callHandlerWithRecover(s, m.ClientAddr, m.Request)
+	request := m.Request
+	m.Request = nil
+	m.Response = callHandlerWithRecover(s, m.ClientAddr, request)
 
 	// Select hack for better performance.
 	// See https://github.com/valyala/gorpc/pull/1 for details.
@@ -327,10 +328,7 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 		wm.ID = m.ID
 		wm.Data = m.Response
 
-		m.ID = 0
-		m.Request = nil
 		m.Response = nil
-		m.ClientAddr = ""
 		serverMessagePool.Put(m)
 
 		if err := e.Encode(wm); err != nil {
