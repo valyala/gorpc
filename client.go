@@ -27,6 +27,11 @@ type Client struct {
 	Conns int
 
 	// The maximum number of pending requests in the queue.
+	//
+	// The number of pending requsts should exceed the expected number
+	// of concurrent goroutines calling client's methods.
+	// Otherwise a lot of ClientError.Overflow errors may appear.
+	//
 	// Default is DefaultPendingMessages.
 	PendingRequests int
 
@@ -272,6 +277,7 @@ type ClientError struct {
 	Connection bool
 
 	// Set if the error is related to internal resources' overflow.
+	// Increase PendingRequests if you see a lot of such errors.
 	Overflow bool
 
 	err error
