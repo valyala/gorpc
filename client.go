@@ -407,7 +407,6 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 
 	t := time.NewTimer(c.FlushDelay)
 	var flushChan <-chan time.Time
-	var msgID uint64
 	var wm wireMessage
 	for {
 		var m *clientMessage
@@ -433,10 +432,10 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			flushChan = getFlushChan(t, c.FlushDelay)
 		}
 
-		msgID++
+		wm.ID++
 		pendingRequestsLock.Lock()
 		n := len(pendingRequests)
-		pendingRequests[msgID] = m
+		pendingRequests[wm.ID] = m
 		pendingRequestsLock.Unlock()
 
 		if n > 10*c.PendingRequests {
@@ -444,7 +443,6 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			return
 		}
 
-		wm.ID = msgID
 		wm.Data = m.Request
 		m.Request = nil
 		if err := e.Encode(wm); err != nil {
