@@ -33,9 +33,9 @@ type Server struct {
 	// The function must process the request and return the corresponding response.
 	Handler HandlerFunc
 
-	// The maximum number of pending responses in the queue.
-	// Default is DefaultPendingMessages.
-	PendingResponses int
+	// The maximum number of concurrent rpc calls the server may perform.
+	// Default is DefaultConcurrency.
+	Concurrency int
 
 	// The maximum delay between response flushes to clients.
 	//
@@ -45,6 +45,10 @@ type Server struct {
 	//
 	// Default is DefaultFlushDelay.
 	FlushDelay time.Duration
+
+	// The maximum number of pending responses in the queue.
+	// Default is DefaultPendingMessages.
+	PendingResponses int
 
 	// Size of send buffer per each TCP connection in bytes.
 	// Default is DefaultBufferSize.
@@ -93,11 +97,14 @@ func (s *Server) Start() error {
 	}
 	s.serverStopChan = make(chan struct{})
 
-	if s.PendingResponses <= 0 {
-		s.PendingResponses = DefaultPendingMessages
+	if s.Concurrency <= 0 {
+		s.Concurrency = DefaultConcurrency
 	}
 	if s.FlushDelay == 0 {
 		s.FlushDelay = DefaultFlushDelay
+	}
+	if s.PendingResponses <= 0 {
+		s.PendingResponses = DefaultPendingMessages
 	}
 	if s.SendBufferSize <= 0 {
 		s.SendBufferSize = DefaultBufferSize
@@ -115,8 +122,9 @@ func (s *Server) Start() error {
 		return err
 	}
 
+	var workersCount int32
 	s.stopWg.Add(1)
-	go serverHandler(s)
+	go serverHandler(s, &workersCount)
 	return nil
 }
 
@@ -136,7 +144,7 @@ func (s *Server) Serve() error {
 	return nil
 }
 
-func serverHandler(s *Server) {
+func serverHandler(s *Server, workersCount *int32) {
 	defer s.stopWg.Done()
 
 	var conn io.ReadWriteCloser
@@ -167,11 +175,11 @@ func serverHandler(s *Server) {
 		}
 
 		s.stopWg.Add(1)
-		go serverHandleConnection(s, conn, clientAddr)
+		go serverHandleConnection(s, conn, clientAddr, workersCount)
 	}
 }
 
-func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr string) {
+func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr string, workersCount *int32) {
 	defer s.stopWg.Done()
 
 	var enabledCompression bool
@@ -203,7 +211,7 @@ func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr strin
 	stopChan := make(chan struct{})
 
 	readerDone := make(chan struct{})
-	go serverReader(s, conn, clientAddr, responsesChan, stopChan, readerDone, enabledCompression)
+	go serverReader(s, conn, clientAddr, responsesChan, stopChan, readerDone, enabledCompression, workersCount)
 
 	writerDone := make(chan struct{})
 	go serverWriter(s, conn, clientAddr, responsesChan, stopChan, writerDone, enabledCompression)
@@ -240,7 +248,9 @@ var serverMessagePool = &sync.Pool{
 	},
 }
 
-func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
+func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<- *serverMessage,
+	stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool, workersCount *int32) {
+
 	defer func() { close(done) }()
 
 	d := newMessageDecoder(r, s.RecvBufferSize, enabledCompression, &s.Stats)
@@ -263,11 +273,22 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 		wr.Request = nil
 		wr.SkipResponse = false
 
-		go serveRequest(s.Handler, s.Addr, responsesChan, stopChan, m)
+		for atomic.AddInt32(workersCount, 1) > int32(s.Concurrency) {
+			atomic.AddInt32(workersCount, -1)
+
+			t := acquireTimer(5 * time.Millisecond)
+			select {
+			case <-stopChan:
+				return
+			case <-t.C:
+			}
+			releaseTimer(t)
+		}
+		go serveRequest(s.Handler, s.Addr, responsesChan, stopChan, m, workersCount)
 	}
 }
 
-func serveRequest(handler HandlerFunc, serverAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, m *serverMessage) {
+func serveRequest(handler HandlerFunc, serverAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, m *serverMessage, workersCount *int32) {
 	request := m.Request
 	m.Request = nil
 	m.Response, m.Error = callHandlerWithRecover(handler, m.ClientAddr, serverAddr, request)
@@ -276,19 +297,20 @@ func serveRequest(handler HandlerFunc, serverAddr string, responsesChan chan<- *
 		m.Response = nil
 		m.Error = ""
 		serverMessagePool.Put(m)
-		return
-	}
-
-	// Select hack for better performance.
-	// See https://github.com/valyala/gorpc/pull/1 for details.
-	select {
-	case responsesChan <- m:
-	default:
+	} else {
+		// Select hack for better performance.
+		// See https://github.com/valyala/gorpc/pull/1 for details.
 		select {
 		case responsesChan <- m:
-		case <-stopChan:
+		default:
+			select {
+			case responsesChan <- m:
+			case <-stopChan:
+			}
 		}
 	}
+
+	atomic.AddInt32(workersCount, -1)
 }
 
 func callHandlerWithRecover(handler HandlerFunc, clientAddr, serverAddr string, request interface{}) (response interface{}, errStr string) {

@@ -7,6 +7,10 @@ import (
 )
 
 const (
+	// DefaultConcurrency is the default number of concurrent rpc calls
+	// the server can process.
+	DefaultConcurrency = 8 * 1024
+
 	// DefaultRequestTimeout is the default timeout for client request.
 	DefaultRequestTimeout = 20 * time.Second
 

@@ -371,6 +371,42 @@ func testIntClient(t *testing.T, c *Client) {
 	}
 }
 
+func TestConcurrency(t *testing.T) {
+	addr := getRandomAddr()
+	s := NewTCPServer(addr, func(clientAddr string, request interface{}) interface{} {
+		time.Sleep(time.Duration(request.(int)) * time.Millisecond)
+		return request
+	})
+	s.Concurrency = 2
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := NewTCPClient(addr)
+	c.Start()
+	defer c.Stop()
+
+	c.Send(100)
+	c.Send(100)
+
+	resp, err := c.CallTimeout(5, 50*time.Millisecond)
+	if err == nil {
+		t.Fatalf("Unexpected nil error")
+	}
+	if !err.(*ClientError).Timeout {
+		t.Fatalf("Unexepcted error type: %v. Expected timeout error", err)
+	}
+
+	resp, err = c.CallTimeout(34, 200*time.Millisecond)
+	if err != nil {
+		t.Fatalf("Unexpected error: [%s]", err)
+	}
+	if resp.(int) != 34 {
+		t.Fatalf("Unexpected response: [%d]. Expected [34]", resp)
+	}
+}
+
 func TestTCPTransport(t *testing.T) {
 	addr := getRandomAddr()
 	s := NewTCPServer(addr, echoHandler)
