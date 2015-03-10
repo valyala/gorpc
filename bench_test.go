@@ -44,7 +44,6 @@ func simulateRealApp(b *testing.B, workersCount int) {
 		doRealWork()
 		return request
 	})
-	s.Concurrency = workersCount
 	s.PendingResponses = workersCount
 
 	c := NewTCPClient(addr)
