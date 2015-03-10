@@ -18,9 +18,16 @@ func RegisterType(x interface{}) {
 	gob.Register(x)
 }
 
-type wireMessage struct {
-	ID   uint64
-	Data interface{}
+type wireRequest struct {
+	ID           uint64
+	Request      interface{}
+	SkipResponse bool
+}
+
+type wireResponse struct {
+	ID       uint64
+	Response interface{}
+	Error    string
 }
 
 type messageEncoder struct {

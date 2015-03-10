@@ -226,10 +226,12 @@ func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr strin
 }
 
 type serverMessage struct {
-	ID         uint64
-	Request    interface{}
-	Response   interface{}
-	ClientAddr string
+	ID           uint64
+	Request      interface{}
+	Response     interface{}
+	SkipResponse bool
+	Error        string
+	ClientAddr   string
 }
 
 var serverMessagePool = &sync.Pool{
@@ -244,18 +246,22 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 	d := newMessageDecoder(r, s.RecvBufferSize, enabledCompression, &s.Stats)
 	defer d.Close()
 
-	var wm wireMessage
+	var wr wireRequest
 	for {
-		if err := d.Decode(&wm); err != nil {
+		if err := d.Decode(&wr); err != nil {
 			logError("gorpc.Server: [%s]->[%s]. Cannot decode request: [%s]", clientAddr, s.Addr, err)
 			return
 		}
 
 		m := serverMessagePool.Get().(*serverMessage)
-		m.ID = wm.ID
-		m.Request = wm.Data
+		m.ID = wr.ID
+		m.Request = wr.Request
+		m.SkipResponse = wr.SkipResponse
 		m.ClientAddr = clientAddr
-		wm.Data = nil
+
+		wr.ID = 0
+		wr.Request = nil
+		wr.SkipResponse = false
 
 		go serveRequest(s.Handler, s.Addr, responsesChan, stopChan, m)
 	}
@@ -264,7 +270,14 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 func serveRequest(handler HandlerFunc, serverAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, m *serverMessage) {
 	request := m.Request
 	m.Request = nil
-	m.Response = callHandlerWithRecover(handler, m.ClientAddr, serverAddr, request)
+	m.Response, m.Error = callHandlerWithRecover(handler, m.ClientAddr, serverAddr, request)
+
+	if m.SkipResponse {
+		m.Response = nil
+		m.Error = ""
+		serverMessagePool.Put(m)
+		return
+	}
 
 	// Select hack for better performance.
 	// See https://github.com/valyala/gorpc/pull/1 for details.
@@ -278,17 +291,17 @@ func serveRequest(handler HandlerFunc, serverAddr string, responsesChan chan<- *
 	}
 }
 
-func callHandlerWithRecover(handler HandlerFunc, clientAddr, serverAddr string, request interface{}) interface{} {
+func callHandlerWithRecover(handler HandlerFunc, clientAddr, serverAddr string, request interface{}) (response interface{}, errStr string) {
 	defer func() {
 		if x := recover(); x != nil {
-			logError("gorpc.Server: [%s]->[%s]. Panic occured: %v", clientAddr, serverAddr, x)
-
 			stackTrace := make([]byte, 1<<20)
 			n := runtime.Stack(stackTrace, false)
-			logError("gorpc.Server: [%s]->[%s]. Stack trace: %s", clientAddr, serverAddr, stackTrace[:n])
+			errStr = fmt.Sprintf("Panic occured: %v\nStack trace: %s", x, stackTrace[:n])
+			logError("gorpc.Server: [%s]->[%s]. %s", clientAddr, serverAddr, errStr)
 		}
 	}()
-	return handler(clientAddr, request)
+	response = handler(clientAddr, request)
+	return
 }
 
 func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-chan *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
@@ -299,7 +312,7 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 
 	var flushChan <-chan time.Time
 	t := time.NewTimer(s.FlushDelay)
-	var wm wireMessage
+	var wr wireResponse
 	for {
 		var m *serverMessage
 
@@ -318,24 +331,26 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 				flushChan = nil
 				continue
 			}
-
 		}
 
 		if flushChan == nil {
 			flushChan = getFlushChan(t, s.FlushDelay)
 		}
 
-		wm.ID = m.ID
-		wm.Data = m.Response
+		wr.ID = m.ID
+		wr.Response = m.Response
+		wr.Error = m.Error
 
 		m.Response = nil
+		m.Error = ""
 		serverMessagePool.Put(m)
 
-		if err := e.Encode(wm); err != nil {
+		if err := e.Encode(wr); err != nil {
 			logError("gorpc.Server: [%s]->[%s]. Cannot send response to wire: [%s]", clientAddr, s.Addr, err)
 			return
 		}
-		wm.Data = nil
+		wr.Response = nil
+		wr.Error = ""
 		atomic.AddUint64(&s.Stats.RpcCalls, 1)
 	}
 }

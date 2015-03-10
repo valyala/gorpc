@@ -168,7 +168,7 @@ func (c *Client) Call(request interface{}) (response interface{}, err error) {
 //
 // Don't forget starting the client with Client.Start() before calling Client.Call().
 func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (response interface{}, err error) {
-	m := acquireClientMessage(request)
+	m := acquireClientMessage(request, false)
 	t := acquireTimer(timeout)
 
 	select {
@@ -216,14 +216,14 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 //
 // Don't forget starting the client with Client.Start() before calling Client.Send().
 func (c *Client) Send(request interface{}) {
-	m := &clientMessage{
-		Request: request,
-		Done:    make(chan struct{}, 1),
-	}
+	m := acquireClientMessage(request, true)
 
 	select {
 	case c.requestsChan <- m:
 	default:
+		m.Request = nil
+		clientMessagePool.Put(m)
+
 		logError("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
 	}
 }
@@ -280,6 +280,9 @@ type ClientError struct {
 
 	// Set if the error is connection-related.
 	Connection bool
+
+	// Set if the error is server-related.
+	Server bool
 
 	// Set if the error is related to internal resources' overflow.
 	// Increase PendingRequests if you see a lot of such errors.
@@ -376,15 +379,16 @@ func clientHandleConnection(c *Client, conn io.ReadWriteCloser) {
 }
 
 type clientMessage struct {
-	Request  interface{}
-	Response interface{}
-	Error    error
-	Done     chan struct{}
+	Request      interface{}
+	Response     interface{}
+	SkipResponse bool
+	Error        error
+	Done         chan struct{}
 }
 
 var clientMessagePool sync.Pool
 
-func acquireClientMessage(request interface{}) *clientMessage {
+func acquireClientMessage(request interface{}, skipResponse bool) *clientMessage {
 	mv := clientMessagePool.Get()
 	if mv == nil {
 		return &clientMessage{
@@ -395,6 +399,7 @@ func acquireClientMessage(request interface{}) *clientMessage {
 
 	m := mv.(*clientMessage)
 	m.Request = request
+	m.SkipResponse = skipResponse
 	return m
 }
 
@@ -407,7 +412,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 
 	t := time.NewTimer(c.FlushDelay)
 	var flushChan <-chan time.Time
-	var wm wireMessage
+	var wr wireRequest
 	for {
 		var m *clientMessage
 
@@ -432,24 +437,31 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			flushChan = getFlushChan(t, c.FlushDelay)
 		}
 
-		wm.ID++
-		pendingRequestsLock.Lock()
-		n := len(pendingRequests)
-		pendingRequests[wm.ID] = m
-		pendingRequestsLock.Unlock()
+		wr.ID++
 
-		if n > 10*c.PendingRequests {
-			err = fmt.Errorf("gorpc.Client: [%s]. The server didn't return %d responses yet. Closing server connection in order to prevent client resource leaks", c.Addr, n)
-			return
+		if !m.SkipResponse {
+			pendingRequestsLock.Lock()
+			n := len(pendingRequests)
+			pendingRequests[wr.ID] = m
+			pendingRequestsLock.Unlock()
+
+			if n > 10*c.PendingRequests {
+				err = fmt.Errorf("gorpc.Client: [%s]. The server didn't return %d responses yet. Closing server connection in order to prevent client resource leaks", c.Addr, n)
+				return
+			}
 		}
 
-		wm.Data = m.Request
+		wr.SkipResponse = m.SkipResponse
+		wr.Request = m.Request
 		m.Request = nil
-		if err := e.Encode(wm); err != nil {
+		if m.SkipResponse {
+			clientMessagePool.Put(m)
+		}
+		if err := e.Encode(wr); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
 			return
 		}
-		wm.Data = nil
+		wr.Request = nil
 	}
 }
 
@@ -460,25 +472,35 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 	d := newMessageDecoder(r, c.RecvBufferSize, !c.DisableCompression, &c.Stats)
 	defer d.Close()
 
-	var wm wireMessage
+	var wr wireResponse
 	for {
-		if err := d.Decode(&wm); err != nil {
+		if err := d.Decode(&wr); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot decode response: [%s]", c.Addr, err)
 			return
 		}
 
 		pendingRequestsLock.Lock()
-		m, ok := pendingRequests[wm.ID]
-		delete(pendingRequests, wm.ID)
+		m, ok := pendingRequests[wr.ID]
+		delete(pendingRequests, wr.ID)
 		pendingRequestsLock.Unlock()
 
 		if !ok {
-			err = fmt.Errorf("gorpc.Client: [%s]. Unexpected msgID=[%d] obtained from server", c.Addr, wm.ID)
+			err = fmt.Errorf("gorpc.Client: [%s]. Unexpected msgID=[%d] obtained from server", c.Addr, wr.ID)
 			return
 		}
 
-		m.Response = wm.Data
-		wm.Data = nil
+		m.Response = wr.Response
+
+		wr.ID = 0
+		wr.Response = nil
+		if wr.Error != "" {
+			m.Error = &ClientError{
+				Server: true,
+				err:    fmt.Errorf("gorpc.Client: [%s]. Server error: [%s]", c.Addr, wr.Error),
+			}
+			wr.Error = ""
+		}
+
 		m.Done <- struct{}{}
 		atomic.AddUint64(&c.Stats.RpcCalls, 1)
 	}

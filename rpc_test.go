@@ -180,11 +180,14 @@ func TestServerPanic(t *testing.T) {
 	defer c.Stop()
 
 	resp, err := c.Call("foobar")
-	if err != nil {
-		t.Fatalf("Unexpected error: [%s]", err)
+	if err == nil {
+		t.Fatalf("Unexpected nil error")
 	}
 	if resp != nil {
 		t.Fatalf("Unepxected response for panicing server: %+v. Expected nil", resp)
+	}
+	if !err.(*ClientError).Server {
+		t.Fatalf("Unexpected error type: %v. Expected server error", err)
 	}
 }
 

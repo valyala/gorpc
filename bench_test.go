@@ -387,10 +387,10 @@ func createEchoServerAndClient(b *testing.B, disableCompression bool, pendingMes
 		c = &Client{
 			Addr: addr,
 		}
+		c.DisableCompression = disableCompression
 	}
 
 	c.Conns = runtime.GOMAXPROCS(-1)
-	c.DisableCompression = disableCompression
 	c.PendingRequests = pendingMessages
 
 	return s, c
