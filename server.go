@@ -257,14 +257,14 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 		m.ClientAddr = clientAddr
 		wm.Data = nil
 
-		go serveRequest(s, responsesChan, stopChan, m)
+		go serveRequest(s.Handler, s.Addr, responsesChan, stopChan, m)
 	}
 }
 
-func serveRequest(s *Server, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, m *serverMessage) {
+func serveRequest(handler HandlerFunc, serverAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, m *serverMessage) {
 	request := m.Request
 	m.Request = nil
-	m.Response = callHandlerWithRecover(s, m.ClientAddr, request)
+	m.Response = callHandlerWithRecover(handler, m.ClientAddr, serverAddr, request)
 
 	// Select hack for better performance.
 	// See https://github.com/valyala/gorpc/pull/1 for details.
@@ -278,17 +278,17 @@ func serveRequest(s *Server, responsesChan chan<- *serverMessage, stopChan <-cha
 	}
 }
 
-func callHandlerWithRecover(s *Server, clientAddr string, request interface{}) interface{} {
+func callHandlerWithRecover(handler HandlerFunc, clientAddr, serverAddr string, request interface{}) interface{} {
 	defer func() {
 		if x := recover(); x != nil {
-			logError("gorpc.Server: [%s]->[%s]. Panic occured: %v", clientAddr, s.Addr, x)
+			logError("gorpc.Server: [%s]->[%s]. Panic occured: %v", clientAddr, serverAddr, x)
 
 			stackTrace := make([]byte, 1<<20)
 			n := runtime.Stack(stackTrace, false)
-			logError("gorpc.Server: [%s]->[%s]. Stack trace: %s", clientAddr, s.Addr, stackTrace[:n])
+			logError("gorpc.Server: [%s]->[%s]. Stack trace: %s", clientAddr, serverAddr, stackTrace[:n])
 		}
 	}()
-	return s.Handler(clientAddr, request)
+	return handler(clientAddr, request)
 }
 
 func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-chan *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
