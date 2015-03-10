@@ -165,7 +165,10 @@ func TestServerPanic(t *testing.T) {
 	s := &Server{
 		Addr: addr,
 		Handler: func(clientAddr string, request interface{}) interface{} {
-			panic("server panic")
+			if request.(string) == "foobar" {
+				panic("server panic")
+			}
+			return request
 		},
 	}
 	if err := s.Start(); err != nil {
@@ -179,15 +182,30 @@ func TestServerPanic(t *testing.T) {
 	c.Start()
 	defer c.Stop()
 
-	resp, err := c.Call("foobar")
-	if err == nil {
-		t.Fatalf("Unexpected nil error")
+	for i := 0; i < 3; i++ {
+		resp, err := c.Call("foobar")
+		if err == nil {
+			t.Fatalf("Unexpected nil error")
+		}
+		if resp != nil {
+			t.Fatalf("Unepxected response for panicing server: %+v. Expected nil", resp)
+		}
+		if !err.(*ClientError).Server {
+			t.Fatalf("Unexpected error type: %v. Expected server error", err)
+		}
 	}
-	if resp != nil {
-		t.Fatalf("Unepxected response for panicing server: %+v. Expected nil", resp)
-	}
-	if !err.(*ClientError).Server {
-		t.Fatalf("Unexpected error type: %v. Expected server error", err)
+
+	for i := 0; i < 3; i++ {
+		resp, err := c.Call("aaaaa")
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		if resp == nil {
+			t.Fatalf("Unepxected nil response")
+		}
+		if resp.(string) != "aaaaa" {
+			t.Fatalf("Unexpected response: %v. Expected 'aaaaa'", resp)
+		}
 	}
 }
 
