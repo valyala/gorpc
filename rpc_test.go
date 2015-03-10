@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -17,9 +18,13 @@ func echoHandler(clientAddr string, request interface{}) interface{} {
 	return request
 }
 
+func getRandomAddr() string {
+	return fmt.Sprintf(":%d", rand.Intn(20000)+10000)
+}
+
 func TestServerServe(t *testing.T) {
 	s := &Server{
-		Addr:    ":15344",
+		Addr:    getRandomAddr(),
 		Handler: echoHandler,
 	}
 	go func() {
@@ -33,7 +38,7 @@ func TestServerServe(t *testing.T) {
 
 func TestServerStartStop(t *testing.T) {
 	s := &Server{
-		Addr:    ":15345",
+		Addr:    getRandomAddr(),
 		Handler: echoHandler,
 	}
 	for i := 0; i < 5; i++ {
@@ -45,8 +50,9 @@ func TestServerStartStop(t *testing.T) {
 }
 
 func TestClientStartStop(t *testing.T) {
+	addr := getRandomAddr()
 	s := &Server{
-		Addr:    ":15346",
+		Addr:    addr,
 		Handler: echoHandler,
 	}
 	if err := s.Start(); err != nil {
@@ -55,7 +61,7 @@ func TestClientStartStop(t *testing.T) {
 	defer s.Stop()
 
 	c := &Client{
-		Addr:  ":15346",
+		Addr:  addr,
 		Conns: 3,
 	}
 	for i := 0; i < 5; i++ {
@@ -66,8 +72,9 @@ func TestClientStartStop(t *testing.T) {
 }
 
 func TestRequestTimeout(t *testing.T) {
+	addr := getRandomAddr()
 	s := &Server{
-		Addr: ":15357",
+		Addr: addr,
 		Handler: func(clientAddr string, request interface{}) interface{} {
 			time.Sleep(10 * time.Second)
 			return request
@@ -79,7 +86,7 @@ func TestRequestTimeout(t *testing.T) {
 	defer s.Stop()
 
 	c := &Client{
-		Addr:           ":15357",
+		Addr:           addr,
 		RequestTimeout: time.Millisecond,
 	}
 	c.Start()
@@ -100,8 +107,9 @@ func TestRequestTimeout(t *testing.T) {
 }
 
 func TestCallTimeout(t *testing.T) {
+	addr := getRandomAddr()
 	s := &Server{
-		Addr: ":15358",
+		Addr: addr,
 		Handler: func(clientAddr string, request interface{}) interface{} {
 			time.Sleep(10 * time.Second)
 			return request
@@ -113,7 +121,7 @@ func TestCallTimeout(t *testing.T) {
 	defer s.Stop()
 
 	c := &Client{
-		Addr: ":15358",
+		Addr: addr,
 	}
 	c.Start()
 	defer c.Stop()
@@ -134,7 +142,7 @@ func TestCallTimeout(t *testing.T) {
 
 func TestNoServer(t *testing.T) {
 	c := &Client{
-		Addr:           ":16368",
+		Addr:           getRandomAddr(),
 		RequestTimeout: 100 * time.Millisecond,
 	}
 	c.Start()
@@ -153,8 +161,9 @@ func TestNoServer(t *testing.T) {
 }
 
 func TestServerPanic(t *testing.T) {
+	addr := getRandomAddr()
 	s := &Server{
-		Addr: ":16358",
+		Addr: addr,
 		Handler: func(clientAddr string, request interface{}) interface{} {
 			panic("server panic")
 		},
@@ -165,7 +174,7 @@ func TestServerPanic(t *testing.T) {
 	defer s.Stop()
 
 	c := &Client{
-		Addr: ":16358",
+		Addr: addr,
 	}
 	c.Start()
 	defer c.Stop()
@@ -180,8 +189,9 @@ func TestServerPanic(t *testing.T) {
 }
 
 func TestServerStuck(t *testing.T) {
+	addr := getRandomAddr()
 	s := &Server{
-		Addr: ":16359",
+		Addr: addr,
 		Handler: func(clientAddr string, request interface{}) interface{} {
 			time.Sleep(time.Second)
 			return "aaa"
@@ -193,7 +203,7 @@ func TestServerStuck(t *testing.T) {
 	defer s.Stop()
 
 	c := &Client{
-		Addr:            ":16359",
+		Addr:            addr,
 		PendingRequests: 100,
 		RequestTimeout:  300 * time.Millisecond,
 	}
@@ -341,7 +351,7 @@ func testIntClient(t *testing.T, c *Client) {
 }
 
 func TestTCPTransport(t *testing.T) {
-	addr := ":23732"
+	addr := getRandomAddr()
 	s := NewTCPServer(addr, echoHandler)
 	if err := s.Start(); err != nil {
 		t.Fatalf("Server.Start() failed: [%s]", err)
@@ -382,13 +392,14 @@ func TestTLSTransport(t *testing.T) {
 		InsecureSkipVerify: true,
 	}
 
-	s := NewTLSServer(":12345", echoHandler, cfg)
+	addr := getRandomAddr()
+	s := NewTLSServer(addr, echoHandler, cfg)
 	if err := s.Start(); err != nil {
 		t.Fatalf("Server.Start() failed: [%s]", err)
 	}
 	defer s.Stop()
 
-	c := NewTLSClient(":12345", cfg)
+	c := NewTLSClient(addr, cfg)
 	c.Start()
 	defer c.Stop()
 
@@ -408,8 +419,9 @@ func TestNoBufferring(t *testing.T) {
 }
 
 func testNoBufferring(t *testing.T, requestFlushDelay, responseFlushDelay time.Duration) {
+	addr := getRandomAddr()
 	s := &Server{
-		Addr:       ":12345",
+		Addr:       addr,
 		Handler:    echoHandler,
 		FlushDelay: responseFlushDelay,
 	}
@@ -419,7 +431,7 @@ func testNoBufferring(t *testing.T, requestFlushDelay, responseFlushDelay time.D
 	defer s.Stop()
 
 	c := &Client{
-		Addr:           ":12345",
+		Addr:           addr,
 		RequestTimeout: 100 * time.Millisecond,
 		FlushDelay:     requestFlushDelay,
 	}
@@ -440,8 +452,9 @@ func testNoBufferring(t *testing.T, requestFlushDelay, responseFlushDelay time.D
 func TestSend(t *testing.T) {
 	var wg sync.WaitGroup
 
+	addr := getRandomAddr()
 	s := &Server{
-		Addr: ":15347",
+		Addr: addr,
 		Handler: func(clientAddr string, request interface{}) interface{} {
 			x, ok := request.(int)
 			if !ok {
@@ -460,7 +473,7 @@ func TestSend(t *testing.T) {
 	defer s.Stop()
 
 	c := &Client{
-		Addr: ":15347",
+		Addr: addr,
 	}
 	c.Start()
 	defer c.Stop()
@@ -473,8 +486,9 @@ func TestSend(t *testing.T) {
 }
 
 func TestCallAsync(t *testing.T) {
+	addr := getRandomAddr()
 	s := &Server{
-		Addr:    ":15447",
+		Addr:    addr,
 		Handler: echoHandler,
 	}
 	if err := s.Start(); err != nil {
@@ -483,7 +497,7 @@ func TestCallAsync(t *testing.T) {
 	defer s.Stop()
 
 	c := &Client{
-		Addr: ":15447",
+		Addr: addr,
 	}
 	c.Start()
 	defer c.Stop()
@@ -509,8 +523,9 @@ func TestCallAsync(t *testing.T) {
 }
 
 func TestIntHandler(t *testing.T) {
+	addr := getRandomAddr()
 	s := &Server{
-		Addr:    ":15347",
+		Addr:    addr,
 		Handler: func(clientAddr string, request interface{}) interface{} { return request.(int) + 234 },
 	}
 	if err := s.Start(); err != nil {
@@ -519,7 +534,7 @@ func TestIntHandler(t *testing.T) {
 	defer s.Stop()
 
 	c := &Client{
-		Addr: ":15347",
+		Addr: addr,
 	}
 	c.Start()
 	defer c.Stop()
@@ -540,8 +555,9 @@ func TestIntHandler(t *testing.T) {
 }
 
 func TestStringHandler(t *testing.T) {
+	addr := getRandomAddr()
 	s := &Server{
-		Addr:    ":15348",
+		Addr:    addr,
 		Handler: func(clientAddr string, request interface{}) interface{} { return request.(string) + " world" },
 	}
 	if err := s.Start(); err != nil {
@@ -550,7 +566,7 @@ func TestStringHandler(t *testing.T) {
 	defer s.Stop()
 
 	c := &Client{
-		Addr: ":15348",
+		Addr: addr,
 	}
 	c.Start()
 	defer c.Stop()
@@ -578,8 +594,9 @@ func TestStructHandler(t *testing.T) {
 	}
 	RegisterType(&S{})
 
+	addr := getRandomAddr()
 	s := &Server{
-		Addr:    ":15349",
+		Addr:    addr,
 		Handler: func(clientAddr string, request interface{}) interface{} { return request.(*S) },
 	}
 	if err := s.Start(); err != nil {
@@ -588,7 +605,7 @@ func TestStructHandler(t *testing.T) {
 	defer s.Stop()
 
 	c := &Client{
-		Addr: ":15349",
+		Addr: addr,
 	}
 	c.Start()
 	defer c.Stop()
@@ -619,8 +636,9 @@ func TestEchoHandler(t *testing.T) {
 	}
 	RegisterType(&SS{})
 
+	addr := getRandomAddr()
 	s := &Server{
-		Addr:    ":15350",
+		Addr:    addr,
 		Handler: echoHandler,
 	}
 	if err := s.Start(); err != nil {
@@ -629,7 +647,7 @@ func TestEchoHandler(t *testing.T) {
 	defer s.Stop()
 
 	c := &Client{
-		Addr: ":15350",
+		Addr: addr,
 	}
 	c.Start()
 	defer c.Stop()
@@ -672,8 +690,9 @@ func TestEchoHandler(t *testing.T) {
 }
 
 func TestConcurrentCall(t *testing.T) {
+	addr := getRandomAddr()
 	s := &Server{
-		Addr:       ":15351",
+		Addr:       addr,
 		Handler:    echoHandler,
 		FlushDelay: time.Millisecond,
 	}
@@ -683,7 +702,7 @@ func TestConcurrentCall(t *testing.T) {
 	defer s.Stop()
 
 	c := &Client{
-		Addr:       ":15351",
+		Addr:       addr,
 		Conns:      2,
 		FlushDelay: time.Millisecond,
 	}
@@ -710,8 +729,9 @@ func TestConcurrentCall(t *testing.T) {
 }
 
 func TestCompress(t *testing.T) {
+	addr := getRandomAddr()
 	s := &Server{
-		Addr:       ":15352",
+		Addr:       addr,
 		Handler:    echoHandler,
 		FlushDelay: time.Millisecond,
 	}
@@ -721,7 +741,7 @@ func TestCompress(t *testing.T) {
 	defer s.Stop()
 
 	c1 := &Client{
-		Addr:               ":15352",
+		Addr:               addr,
 		Conns:              2,
 		FlushDelay:         time.Millisecond,
 		DisableCompression: true,
@@ -730,15 +750,15 @@ func TestCompress(t *testing.T) {
 	defer c1.Stop()
 
 	c2 := &Client{
-		Addr:               ":15352",
-		FlushDelay:         2 * time.Millisecond,
+		Addr:               addr,
+		FlushDelay:         time.Millisecond,
 		DisableCompression: false,
 	}
 	c2.Start()
 	defer c2.Stop()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 200; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

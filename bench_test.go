@@ -39,11 +39,12 @@ func doRealWork() {
 }
 
 func simulateRealApp(b *testing.B, workersCount int) {
-	addr := fmt.Sprintf(":%d", rand.Intn(20000)+10000)
+	addr := getRandomAddr()
 	s := NewTCPServer(addr, func(clientAddr string, request interface{}) interface{} {
 		doRealWork()
 		return request
 	})
+	s.Concurrency = workersCount
 	s.PendingResponses = workersCount
 
 	c := NewTCPClient(addr)
@@ -379,7 +380,7 @@ func createEchoServerAndClient(b *testing.B, disableCompression bool, pendingMes
 		s = NewUnixServer(addr, echoHandler)
 		c = NewUnixClient(addr)
 	} else {
-		addr := fmt.Sprintf(":%d", rand.Intn(20000)+10000)
+		addr := getRandomAddr()
 		s = &Server{
 			Addr:    addr,
 			Handler: echoHandler,
