@@ -9,7 +9,7 @@ import (
 // and gorpc.Server.
 type ConnStats struct {
 	// The number of rpc calls performed.
-	RpcCalls uint64
+	RPCCalls uint64
 
 	// The number of bytes written to the underlying connections.
 	BytesWritten uint64
