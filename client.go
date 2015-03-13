@@ -18,7 +18,13 @@ import (
 // Default client settings are optimized for high load, so don't override
 // them without valid reason.
 type Client struct {
-	// Server TCP address to connect to.
+	// Server address to connect to.
+	//
+	// The address format depends on the underlying transport provided
+	// by Client.Dial. The following transports are provided out of the box:
+	//   * TCP - see NewTCPClient() and NewTCPServer().
+	//   * TLS - see NewTLSClient() and NewTLSServer().
+	//   * Unix sockets - see NewUnixClient() and NewUnixServer().
 	Addr string
 
 	// The number of concurrent connections the client should establish

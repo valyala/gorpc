@@ -24,7 +24,14 @@ type HandlerFunc func(clientAddr string, request interface{}) (response interfac
 // Default server settings are optimized for high load, so don't override
 // them without valid reason.
 type Server struct {
-	// TCP address to listen to for incoming connections.
+	// Address to listen to for incoming connections.
+	//
+	// The address format depends on the underlying transport provided
+	// by Server.Listener. The following transports are provided
+	// out of the box:
+	//   * TCP - see NewTCPServer() and NewTCPClient().
+	//   * TLS (aka SSL) - see NewTLSServer() and NewTLSClient().
+	//   * Unix sockets - see NewUnixServer() and NewUnixClient().
 	Addr string
 
 	// Handler function for incoming requests.

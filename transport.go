@@ -189,7 +189,7 @@ func NewUnixServer(addr string, handler HandlerFunc) *Server {
 	}
 }
 
-// NewTLSClient creates a client connecting over TLS to the server
+// NewTLSClient creates a client connecting over TLS (aka SSL) to the server
 // listening to the given addr using the given TLS config.
 //
 // The returned client must be started after optional settings' adjustment.
@@ -208,7 +208,7 @@ func NewTLSClient(addr string, cfg *tls.Config) *Client {
 	}
 }
 
-// NewTLSServer creates a server listening for TLS connections
+// NewTLSServer creates a server listening for TLS (aka SSL) connections
 // on the given addr and processing incoming requests
 // with the given HandlerFunc.
 // cfg must contain TLS settings for the server.
