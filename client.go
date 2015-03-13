@@ -25,6 +25,8 @@ type Client struct {
 	//   * TCP - see NewTCPClient() and NewTCPServer().
 	//   * TLS - see NewTLSClient() and NewTLSServer().
 	//   * Unix sockets - see NewUnixClient() and NewUnixServer().
+	//
+	// By default TCP transport is used.
 	Addr string
 
 	// The number of concurrent connections the client should establish

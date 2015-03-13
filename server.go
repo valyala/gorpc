@@ -32,6 +32,8 @@ type Server struct {
 	//   * TCP - see NewTCPServer() and NewTCPClient().
 	//   * TLS (aka SSL) - see NewTLSServer() and NewTLSClient().
 	//   * Unix sockets - see NewUnixServer() and NewUnixClient().
+	//
+	// By default TCP transport is used.
 	Addr string
 
 	// Handler function for incoming requests.
