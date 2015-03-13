@@ -60,11 +60,11 @@ type Client struct {
 	// By default data compression is enabled.
 	DisableCompression bool
 
-	// Size of send buffer per each TCP connection in bytes.
+	// Size of send buffer per each underlying connection in bytes.
 	// Default value is DefaultBufferSize.
 	SendBufferSize int
 
-	// Size of recv buffer per each TCP connection in bytes.
+	// Size of recv buffer per each underlying connection in bytes.
 	// Default value is DefaultBufferSize.
 	RecvBufferSize int
 
@@ -80,8 +80,7 @@ type Client struct {
 	// * NewUnixClient() and NewUnixServer() can be used for fast local
 	//   inter-process rpc.
 	//
-	// By default it returns TCP connections established
-	// to the Client.Addr.
+	// By default it returns TCP connections established to the Client.Addr.
 	Dial DialFunc
 
 	// Connection statistics.

@@ -59,11 +59,11 @@ type Server struct {
 	// Default is DefaultPendingMessages.
 	PendingResponses int
 
-	// Size of send buffer per each TCP connection in bytes.
+	// Size of send buffer per each underlying connection in bytes.
 	// Default is DefaultBufferSize.
 	SendBufferSize int
 
-	// Size of recv buffer per each TCP connection in bytes.
+	// Size of recv buffer per each underlying connection in bytes.
 	// Default is DefaultBufferSize.
 	RecvBufferSize int
 
