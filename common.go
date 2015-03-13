@@ -20,7 +20,7 @@ const (
 
 	// DefaultFlushDelay is the default delay between message flushes
 	// on Client and Server.
-	DefaultFlushDelay = 5 * time.Millisecond
+	DefaultFlushDelay = -1
 
 	// DefaultBufferSize is the default size for Client and Server buffers.
 	DefaultBufferSize = 64 * 1024
