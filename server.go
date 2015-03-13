@@ -382,6 +382,6 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 		}
 		wr.Response = nil
 		wr.Error = ""
-		atomic.AddUint64(&s.Stats.RpcCalls, 1)
+		atomic.AddUint64(&s.Stats.RPCCalls, 1)
 	}
 }

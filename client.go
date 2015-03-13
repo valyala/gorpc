@@ -510,6 +510,6 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 		}
 
 		m.Done <- struct{}{}
-		atomic.AddUint64(&c.Stats.RpcCalls, 1)
+		atomic.AddUint64(&c.Stats.RPCCalls, 1)
 	}
 }
