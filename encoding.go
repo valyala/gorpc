@@ -2,8 +2,8 @@ package gorpc
 
 import (
 	"bufio"
-	"compress/flate"
 	"encoding/gob"
+	"github.com/pierrec/lz4"
 	"io"
 )
 
@@ -33,7 +33,7 @@ type wireResponse struct {
 type messageEncoder struct {
 	e  *gob.Encoder
 	bw *bufio.Writer
-	zw *flate.Writer
+	zw *lz4.Writer
 	ww *bufio.Writer
 }
 
@@ -68,9 +68,9 @@ func newMessageEncoder(w io.Writer, bufferSize int, enableCompression bool, s *C
 	bw := bufio.NewWriterSize(w, bufferSize)
 
 	ww := bw
-	var zw *flate.Writer
+	var zw *lz4.Writer
 	if enableCompression {
-		zw, _ = flate.NewWriter(bw, flate.BestSpeed)
+		zw = lz4.NewWriter(bw)
 		ww = bufio.NewWriterSize(zw, bufferSize)
 	}
 
@@ -83,14 +83,10 @@ func newMessageEncoder(w io.Writer, bufferSize int, enableCompression bool, s *C
 }
 
 type messageDecoder struct {
-	d  *gob.Decoder
-	zr io.ReadCloser
+	d *gob.Decoder
 }
 
 func (d *messageDecoder) Close() error {
-	if d.zr != nil {
-		return d.zr.Close()
-	}
 	return nil
 }
 
@@ -103,14 +99,12 @@ func newMessageDecoder(r io.Reader, bufferSize int, enableCompression bool, s *C
 	br := bufio.NewReaderSize(r, bufferSize)
 
 	rr := br
-	var zr io.ReadCloser
 	if enableCompression {
-		zr = flate.NewReader(br)
+		zr := lz4.NewReader(br)
 		rr = bufio.NewReaderSize(zr, bufferSize)
 	}
 
 	return &messageDecoder{
-		d:  gob.NewDecoder(rr),
-		zr: zr,
+		d: gob.NewDecoder(rr),
 	}
 }
