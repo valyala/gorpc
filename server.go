@@ -131,9 +131,9 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	var workersCount int32
+	workersCh := make(chan struct{}, s.Concurrency)
 	s.stopWg.Add(1)
-	go serverHandler(s, &workersCount)
+	go serverHandler(s, workersCh)
 	return nil
 }
 
@@ -153,7 +153,7 @@ func (s *Server) Serve() error {
 	return nil
 }
 
-func serverHandler(s *Server, workersCount *int32) {
+func serverHandler(s *Server, workersCh chan struct{}) {
 	defer s.stopWg.Done()
 
 	var conn io.ReadWriteCloser
@@ -184,11 +184,11 @@ func serverHandler(s *Server, workersCount *int32) {
 		}
 
 		s.stopWg.Add(1)
-		go serverHandleConnection(s, conn, clientAddr, workersCount)
+		go serverHandleConnection(s, conn, clientAddr, workersCh)
 	}
 }
 
-func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr string, workersCount *int32) {
+func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr string, workersCh chan struct{}) {
 	defer s.stopWg.Done()
 
 	var enabledCompression bool
@@ -220,7 +220,7 @@ func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr strin
 	stopChan := make(chan struct{})
 
 	readerDone := make(chan struct{})
-	go serverReader(s, conn, clientAddr, responsesChan, stopChan, readerDone, enabledCompression, workersCount)
+	go serverReader(s, conn, clientAddr, responsesChan, stopChan, readerDone, enabledCompression, workersCh)
 
 	writerDone := make(chan struct{})
 	go serverWriter(s, conn, clientAddr, responsesChan, stopChan, writerDone, enabledCompression)
@@ -258,7 +258,7 @@ var serverMessagePool = &sync.Pool{
 }
 
 func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<- *serverMessage,
-	stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool, workersCount *int32) {
+	stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool, workersCh chan struct{}) {
 
 	defer func() { close(done) }()
 
@@ -282,22 +282,20 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 		wr.Request = nil
 		wr.SkipResponse = false
 
-		for atomic.AddInt32(workersCount, 1) > int32(s.Concurrency) {
-			atomic.AddInt32(workersCount, -1)
-
-			t := acquireTimer(5 * time.Millisecond)
+		select {
+		case workersCh <- struct{}{}:
+		default:
 			select {
+			case workersCh <- struct{}{}:
 			case <-stopChan:
 				return
-			case <-t.C:
 			}
-			releaseTimer(t)
 		}
-		go serveRequest(s.Handler, s.Addr, responsesChan, stopChan, m, workersCount)
+		go serveRequest(s.Handler, s.Addr, responsesChan, stopChan, m, workersCh)
 	}
 }
 
-func serveRequest(handler HandlerFunc, serverAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, m *serverMessage, workersCount *int32) {
+func serveRequest(handler HandlerFunc, serverAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, m *serverMessage, workersCh <-chan struct{}) {
 	request := m.Request
 	m.Request = nil
 	m.Response, m.Error = callHandlerWithRecover(handler, m.ClientAddr, serverAddr, request)
@@ -319,7 +317,7 @@ func serveRequest(handler HandlerFunc, serverAddr string, responsesChan chan<- *
 		}
 	}
 
-	atomic.AddInt32(workersCount, -1)
+	<-workersCh
 }
 
 func callHandlerWithRecover(handler HandlerFunc, clientAddr, serverAddr string, request interface{}) (response interface{}, errStr string) {
