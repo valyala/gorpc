@@ -209,12 +209,20 @@ func validateType(t reflect.Type) (err error) {
 			return
 		}
 	case reflect.Struct:
+		n := 0
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)
-			if err = validateType(f.Type); err != nil {
-				err = fmt.Errorf("%s in the field [%s] of struct [%s]", err, f.Name, t)
-				return
+			if f.PkgPath == "" {
+				if err = validateType(f.Type); err != nil {
+					err = fmt.Errorf("%s in the field [%s] of struct [%s]", err, f.Name, t)
+					return
+				}
+				n++
 			}
+		}
+		if n == 0 {
+			err = fmt.Errorf("struct without exported fields [%s]", t)
+			return
 		}
 	}
 

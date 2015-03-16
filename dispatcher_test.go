@@ -23,16 +23,16 @@ func TestDispatcherRegisterFunc(t *testing.T) {
 	})
 
 	type ReqStruct struct {
-		a int
+		A int
 		B *ReqStruct
-		C string
+		c string
 	}
 	type respStruct struct {
-		x int
+		X int
 	}
 	d.RegisterFunc("bbb", func(request *ReqStruct) (*respStruct, error) {
 		return &respStruct{
-			x: request.B.a,
+			X: request.B.A,
 		}, nil
 	})
 
@@ -91,10 +91,10 @@ func TestDispatcherRegisterFunc(t *testing.T) {
 		}
 
 		resp, err = fc.Call("bbb", &ReqStruct{
-			a: i+34,
+			A: i + 34,
 			B: &ReqStruct{
-				a: i,
-				C: "foobar",
+				A: i,
+				c: "foobar",
 			},
 		})
 		if err != nil {
@@ -104,8 +104,8 @@ func TestDispatcherRegisterFunc(t *testing.T) {
 		if !ok {
 			t.Fatalf("Unexpected response type: %T. Expected *respStruct", resp)
 		}
-		if resps.x != i {
-			t.Fatalf("unexpected response.x=%d. Expected %d", resps.x, i)
+		if resps.X != i {
+			t.Fatalf("unexpected response.X=%d. Expected %d", resps.X, i)
 		}
 	}
 
