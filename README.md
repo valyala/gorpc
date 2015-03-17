@@ -3,9 +3,9 @@ gorpc
 
 Simple, fast and scalable golang RPC library for high load.
 
-Unlike standard library at http://golang.org/pkg/net/rpc/ it multiplexes
-requests over a small number of TCP connections. This provides the following
-features useful for highly loaded RPC projects:
+
+Gorpc provides the following features useful for highly loaded projects
+with RPC:
 
 * It minimizes the number of connect() syscalls by pipelining request
   and response messages over a single TCP connection.
@@ -22,6 +22,10 @@ TCP connections in TIME_WAIT and CLOSE_WAIT states, the number of network
 packets and the amount of network bandwidth) required for RPC processing under
 high load.
 
+
+Gorpc also provides easy to use API on the top of Dispatcher.
+
+
 By default TCP connections are used as underlying gorpc transport. But you can
 use anything you want as an underlying transport - just provide custom
 implementations for Client.Dial and Server.Listener.
@@ -29,9 +33,17 @@ RPC client authentication and authorization can be easily implemented via custom
 underlying transport.
 Currently gorpc provides TCP, TLS and unix socket transport out of the box.
 
+
 Currently gorpc with default settings is successfully used in highly loaded
 production environment serving up to 40K qps. Switching from http-based rpc
 to gorpc reduced required network bandwidth from 300 Mbit/s to 24 Mbit/s.
+
+
+Docs
+====
+
+See http://godoc.org/github.com/valyala/gorpc .
+
 
 Usage
 =====
@@ -95,8 +107,3 @@ read / written and the number of calls / errors to send(), recv(), connect()
 and accept(). This stats is available at Client.Stats and Server.Stats.
 
 See tests for more usage examples.
-
-Docs
-====
-
-See http://godoc.org/github.com/valyala/gorpc .
