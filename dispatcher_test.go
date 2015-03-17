@@ -8,6 +8,13 @@ import (
 	"unsafe"
 )
 
+func TestDispatcherAddNonFunc(t *testing.T) {
+	d := NewDispatcher()
+	testPanic(t, func() {
+		d.AddFunc("foobar", 123)
+	})
+}
+
 func TestDispatcherEmptyFuncName(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
