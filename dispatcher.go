@@ -114,7 +114,7 @@ func validateFunc(funcName string, fv reflect.Value, isMethod bool) (inNum, outN
 			err = fmt.Errorf("unexpected type for the first argument of the function [%s]: [%s]. Expected string", funcName, argt)
 			return
 		}
-	} else if outNum > 2+dt {
+	} else if inNum > 2+dt {
 		err = fmt.Errorf("unexpected number of arguments in the function [%s]: %d. Expected 0, 1 (request) or 2 (clientAddr, request)", funcName, inNum-dt)
 		return
 	}
