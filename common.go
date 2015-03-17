@@ -1,6 +1,7 @@
 package gorpc
 
 import (
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -40,6 +41,12 @@ func SetErrorLogger(f LoggerFunc) {
 
 func logError(format string, args ...interface{}) {
 	errorLogger(format, args...)
+}
+
+func logPanic(format string, args ...interface{}) {
+	errorLogger(format, args...)
+	s := fmt.Sprintf(format, args...)
+	panic(s)
 }
 
 var timerPool sync.Pool

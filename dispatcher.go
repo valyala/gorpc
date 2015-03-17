@@ -2,7 +2,6 @@ package gorpc
 
 import (
 	"fmt"
-	"log"
 	"reflect"
 	"strings"
 	"time"
@@ -39,7 +38,7 @@ func (d *Dispatcher) RegisterFunc(funcName string, f interface{}) {
 	}
 
 	if _, ok := sd.funcMap[funcName]; ok {
-		log.Panicf("gorpc.Dispatcher: function %s has been already registered", funcName)
+		logPanic("gorpc.Dispatcher: function %s has been already registered", funcName)
 	}
 
 	fd := &funcData{
@@ -47,17 +46,17 @@ func (d *Dispatcher) RegisterFunc(funcName string, f interface{}) {
 	}
 	var err error
 	if fd.inNum, fd.outNum, err = validateFunc(funcName, fd.fv, false); err != nil {
-		log.Panicf("gorpc.Disaptcher: %s", err)
+		logPanic("gorpc.Disaptcher: %s", err)
 	}
 	sd.funcMap[funcName] = fd
 }
 
 func (d *Dispatcher) RegisterService(serviceName string, service interface{}) {
 	if serviceName == "" {
-		log.Panicf("gorpc.Dispatcher: serviceName cannot be empty")
+		logPanic("gorpc.Dispatcher: serviceName cannot be empty")
 	}
 	if _, ok := d.serviceMap[serviceName]; ok {
-		log.Panicf("gorpc.Dispatcher: service with name=[%s] has been already registered", serviceName)
+		logPanic("gorpc.Dispatcher: service with name=[%s] has been already registered", serviceName)
 	}
 
 	funcMap := make(map[string]*funcData)
@@ -77,13 +76,13 @@ func (d *Dispatcher) RegisterService(serviceName string, service interface{}) {
 		}
 		var err error
 		if fd.inNum, fd.outNum, err = validateFunc(funcName, fd.fv, true); err != nil {
-			log.Panicf("gorpc.Dispatcher: %s", err)
+			logPanic("gorpc.Dispatcher: %s", err)
 		}
 		funcMap[funcName] = fd
 	}
 
 	if len(funcMap) == 0 {
-		log.Panicf("gorpc.Dispatcher: the service %s has no methods suitable for rpc", serviceName)
+		logPanic("gorpc.Dispatcher: the service %s has no methods suitable for rpc", serviceName)
 	}
 
 	d.serviceMap[serviceName] = &serviceData{
@@ -255,7 +254,7 @@ func init() {
 
 func (d *Dispatcher) HandlerFunc() HandlerFunc {
 	if len(d.serviceMap) == 0 {
-		log.Panicf("gorpc.Dispatcher: register at least one service before calling HandlerFunc()")
+		logPanic("gorpc.Dispatcher: register at least one service before calling HandlerFunc()")
 	}
 
 	serviceMap := copyServiceMap(d.serviceMap)
@@ -263,7 +262,7 @@ func (d *Dispatcher) HandlerFunc() HandlerFunc {
 	return func(clientAddr string, request interface{}) interface{} {
 		req, ok := request.(*dispatcherRequest)
 		if !ok {
-			log.Panicf("gorpc.Dispatcher: unsupported request type received from the client: %T", request)
+			logPanic("gorpc.Dispatcher: unsupported request type received from the client: %T", request)
 		}
 		return dispatchRequest(serviceMap, clientAddr, req)
 	}
@@ -328,7 +327,7 @@ func dispatchRequest(serviceMap map[string]*serviceData, clientAddr string, req 
 	resp := &dispatcherResponse{}
 
 	if len(outArgs) > 2 {
-		log.Panicf("gorpc.Dispatcher: unexpected number of out arguments when calling [%s]: %d. Should be lower than 3", req.Name, len(outArgs))
+		logPanic("gorpc.Dispatcher: unexpected number of out arguments when calling [%s]: %d. Should be lower than 3", req.Name, len(outArgs))
 	}
 
 	if len(outArgs) == 1 {
