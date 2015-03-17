@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+// Dispatcher helps constructing HandlerFunc for dispatching across multiple
+// functions and/or services.
 type Dispatcher struct {
 	serviceMap map[string]*serviceData
 }
@@ -22,12 +24,14 @@ type funcData struct {
 	fv     reflect.Value
 }
 
+// NewDispatcher returns new dispatcher.
 func NewDispatcher() *Dispatcher {
 	return &Dispatcher{
 		serviceMap: make(map[string]*serviceData),
 	}
 }
 
+// AddFunc registers the given function f under the name funcName.
 func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
 	sd, ok := d.serviceMap[""]
 	if !ok {
@@ -51,6 +55,7 @@ func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
 	sd.funcMap[funcName] = fd
 }
 
+// AddService registers the given service under the name serviceName.
 func (d *Dispatcher) AddService(serviceName string, service interface{}) {
 	if serviceName == "" {
 		logPanic("gorpc.Dispatcher: serviceName cannot be empty")
@@ -256,6 +261,11 @@ func init() {
 	RegisterType(&dispatcherResponse{})
 }
 
+// HandlerFunc returns HandlerFunc serving all the functions and/or services
+// registered via AddFunc() and AddService().
+//
+// The returned HandlerFunc must be assigned to Server.Handler or
+// passed to New*Server().
 func (d *Dispatcher) HandlerFunc() HandlerFunc {
 	if len(d.serviceMap) == 0 {
 		logPanic("gorpc.Dispatcher: register at least one service before calling HandlerFunc()")
@@ -365,17 +375,25 @@ func getErrorString(v reflect.Value) string {
 	return v.Interface().(error).Error()
 }
 
+// DispatcherClient is a Client wrapper suitable for calling registered
+// functions and/or for calling methods of the registered services.
 type DispatcherClient struct {
 	c           *Client
 	serviceName string
 }
 
+// NewFuncClient returns a client suitable for calling functions registered
+// via AddFunc().
 func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
 	return &DispatcherClient{
 		c: c,
 	}
 }
 
+// NewServiceClient returns a client suitable for calling service methods
+// registered via AddService().
+//
+// It is safe creating multiple service clients over a single underlying client.
 func (d *Dispatcher) NewServiceClient(serviceName string, c *Client) *DispatcherClient {
 	return &DispatcherClient{
 		c:           c,
@@ -383,10 +401,12 @@ func (d *Dispatcher) NewServiceClient(serviceName string, c *Client) *Dispatcher
 	}
 }
 
+// Call calls the given function.
 func (dc *DispatcherClient) Call(funcName string, request interface{}) (response interface{}, err error) {
 	return dc.CallTimeout(funcName, request, dc.c.RequestTimeout)
 }
 
+// CallTimeout calls the given function and waits for response during the given timeout.
 func (dc *DispatcherClient) CallTimeout(funcName string, request interface{}, timeout time.Duration) (response interface{}, err error) {
 	req := dc.getRequest(funcName, request)
 	respv, err := dc.c.CallTimeout(req, timeout)
@@ -396,15 +416,19 @@ func (dc *DispatcherClient) CallTimeout(funcName string, request interface{}, ti
 	return getResponse(respv)
 }
 
+// Sends sends the given request to the given function and doesn't
+// wait for response.
 func (dc *DispatcherClient) Send(funcName string, request interface{}) {
 	req := dc.getRequest(funcName, request)
 	dc.c.Send(req)
 }
 
+// CallAsync calls the given function asynchronously.
 func (dc *DispatcherClient) CallAsync(funcName string, request interface{}) *AsyncResult {
 	return dc.CallAsyncTimeout(funcName, request, dc.c.RequestTimeout)
 }
 
+// CallAsyncTimeout calls the given function asynchronously with the given timeout.
 func (dc *DispatcherClient) CallAsyncTimeout(funcName string, request interface{}, timeout time.Duration) *AsyncResult {
 	req := dc.getRequest(funcName, request)
 
