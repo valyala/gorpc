@@ -360,7 +360,8 @@ func getErrorString(v reflect.Value) string {
 }
 
 type DispatcherClient struct {
-	c *Client
+	c           *Client
+	serviceName string
 }
 
 func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
@@ -374,22 +375,61 @@ func (dc *DispatcherClient) Call(funcName string, request interface{}) (response
 }
 
 func (dc *DispatcherClient) CallTimeout(funcName string, request interface{}, timeout time.Duration) (response interface{}, err error) {
-	req := &dispatcherRequest{
-		Name:    "." + funcName,
-		Request: request,
-	}
-	respv, err := dc.c.CallTimeout(&req, timeout)
+	req := dc.getRequest(funcName, request)
+	respv, err := dc.c.CallTimeout(req, timeout)
 	if err != nil {
 		return
 	}
+	return getResponse(respv)
+}
+
+func (dc *DispatcherClient) Send(funcName string, request interface{}) {
+	req := dc.getRequest(funcName, request)
+	dc.c.Send(req)
+}
+
+func (dc *DispatcherClient) CallAsync(funcName string, request interface{}) *AsyncResult {
+	return dc.CallAsyncTimeout(funcName, request, dc.c.RequestTimeout)
+}
+
+func (dc *DispatcherClient) CallAsyncTimeout(funcName string, request interface{}, timeout time.Duration) *AsyncResult {
+	req := dc.getRequest(funcName, request)
+
+	innerAr := dc.c.CallAsyncTimeout(req, timeout)
+
+	ch := make(chan struct{})
+	ar := &AsyncResult{
+		Done: ch,
+	}
+
+	go func() {
+		<-innerAr.Done
+
+		if innerAr.Error != nil {
+			ar.Error = innerAr.Error
+		} else {
+			ar.Response, ar.Error = getResponse(innerAr.Response)
+		}
+		close(ch)
+	}()
+
+	return ar
+}
+
+func (dc *DispatcherClient) getRequest(funcName string, request interface{}) *dispatcherRequest {
+	return &dispatcherRequest{
+		Name:    dc.serviceName + "." + funcName,
+		Request: request,
+	}
+}
+
+func getResponse(respv interface{}) (interface{}, error) {
 	resp, ok := respv.(*dispatcherResponse)
 	if !ok {
-		err = fmt.Errorf("gorpc.DispatcherClient: unexpected response type: %T. Expected dispatcherResponse", respv)
-		return
+		return nil, fmt.Errorf("gorpc.DispatcherClient: unexpected response type: %T. Expected *dispatcherResponse", respv)
 	}
 	if resp.Error != "" {
-		err = fmt.Errorf("%s", resp.Error)
-		return
+		return nil, fmt.Errorf("%s", resp.Error)
 	}
 	return resp.Response, nil
 }

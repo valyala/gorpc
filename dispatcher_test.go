@@ -648,6 +648,60 @@ func TestDispatcherTwoArgTwoResCall(t *testing.T) {
 	})
 }
 
+func TestDispatcherSend(t *testing.T) {
+	d := NewDispatcher()
+
+	N := 10
+	ch := make(chan struct{}, N)
+	serverS := 0
+	clientS := 0
+	d.RegisterFunc("Sum", func(n int) {
+		serverS += n
+		ch <- struct{}{}
+	})
+
+	testDispatcher(t, d, func(fc *DispatcherClient) {
+		for i := 0; i < N; i++ {
+			fc.Send("Sum", i)
+			clientS += i
+		}
+		for i := 0; i < N; i++ {
+			<-ch
+		}
+		if serverS != clientS {
+			t.Fatalf("Unepxected serverS=%d. Should be %d", serverS, clientS)
+		}
+	})
+}
+
+func TestDispatcherCallAsync(t *testing.T) {
+	d := NewDispatcher()
+
+	d.RegisterFunc("aaa", func(x int) int { return x })
+
+	testDispatcher(t, d, func(fc *DispatcherClient) {
+		N := 10
+		ar := make([]*AsyncResult, N)
+		for i := 0; i < N; i++ {
+			ar[i] = fc.CallAsync("aaa", i)
+		}
+		for i := 0; i < N; i++ {
+			r := ar[i]
+			<-r.Done
+			if r.Error != nil {
+				t.Fatalf("Unexpected error: [%s]", r.Error)
+			}
+			ress, ok := r.Response.(int)
+			if !ok {
+				t.Fatalf("Unexpected response type: %T. Expected int", r.Response)
+			}
+			if ress != i {
+				t.Fatalf("Unexpected response: [%d]. Expected [%d]", ress, i)
+			}
+		}
+	})
+}
+
 func testDispatcher(t *testing.T, d *Dispatcher, f func(fc *DispatcherClient)) {
 	addr := getRandomAddr()
 	s := NewTCPServer(addr, d.HandlerFunc())
