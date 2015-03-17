@@ -810,7 +810,7 @@ func TestDispatcherService(t *testing.T) {
 			t.Fatalf("Unexpected response type: %T. Expected int", res)
 		}
 		if ress != service.state {
-			t.Fatalf("Unexpected response: [%d]. Expected [%s]", ress, service.state)
+			t.Fatalf("Unexpected response: [%d]. Expected [%d]", ress, service.state)
 		}
 	})
 }
