@@ -115,8 +115,8 @@ func validateFunc(funcName string, fv reflect.Value, isMethod bool) (inNum, outN
 			err = fmt.Errorf("unexpected type for the first argument of the function [%s]: [%s]. Expected string", funcName, argt)
 			return
 		}
-	} else if inNum != 1+dt {
-		err = fmt.Errorf("unexpected number of arguments in the function [%s]: %d. Expected 1 (request) or 2 (clientAddr, request)", funcName, inNum-dt)
+	} else if outNum > 2+dt {
+		err = fmt.Errorf("unexpected number of arguments in the function [%s]: %d. Expected 0, 1 (request) or 2 (clientAddr, request)", funcName, inNum-dt)
 		return
 	}
 
@@ -132,8 +132,10 @@ func validateFunc(funcName string, fv reflect.Value, isMethod bool) (inNum, outN
 		return
 	}
 
-	if err = registerType("request", funcName, ft.In(inNum-1)); err != nil {
-		return
+	if inNum > 0 {
+		if err = registerType("request", funcName, ft.In(inNum-1)); err != nil {
+			return
+		}
 	}
 
 	if outNum > 0 {
@@ -144,6 +146,7 @@ func validateFunc(funcName string, fv reflect.Value, isMethod bool) (inNum, outN
 			}
 		}
 	}
+
 	return
 }
 
@@ -160,7 +163,13 @@ func registerType(s, funcName string, t reflect.Type) error {
 	if t.Kind() != reflect.Struct {
 		tv = reflect.Indirect(tv)
 	}
-	RegisterType(tv.Interface())
+
+	switch t.Kind() {
+	case reflect.Array, reflect.Slice, reflect.Map, reflect.Struct:
+		RegisterType(tv.Interface())
+	default:
+	}
+
 	return nil
 }
 
@@ -303,13 +312,13 @@ func dispatchRequest(serviceMap map[string]*serviceData, clientAddr string, req 
 	if serviceName != "" {
 		if fd.inNum == 2 {
 			inArgs = []reflect.Value{s.service, reflect.ValueOf(clientAddr), reqv}
-		} else {
+		} else if fd.inNum == 1 {
 			inArgs = []reflect.Value{s.service, reqv}
 		}
 	} else {
 		if fd.inNum == 2 {
 			inArgs = []reflect.Value{reflect.ValueOf(clientAddr), reqv}
-		} else {
+		} else if fd.inNum == 1 {
 			inArgs = []reflect.Value{reqv}
 		}
 	}
