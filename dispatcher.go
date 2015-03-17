@@ -28,7 +28,7 @@ func NewDispatcher() *Dispatcher {
 	}
 }
 
-func (d *Dispatcher) RegisterFunc(funcName string, f interface{}) {
+func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
 	sd, ok := d.serviceMap[""]
 	if !ok {
 		sd = &serviceData{
@@ -51,7 +51,7 @@ func (d *Dispatcher) RegisterFunc(funcName string, f interface{}) {
 	sd.funcMap[funcName] = fd
 }
 
-func (d *Dispatcher) RegisterService(serviceName string, service interface{}) {
+func (d *Dispatcher) AddService(serviceName string, service interface{}) {
 	if serviceName == "" {
 		logPanic("gorpc.Dispatcher: serviceName cannot be empty")
 	}

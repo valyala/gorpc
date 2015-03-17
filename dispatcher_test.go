@@ -11,97 +11,97 @@ import (
 func TestDispatcherEmptyFuncName(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("", func() {})
+		d.AddFunc("", func() {})
 	})
 }
 
 func TestDispatcherInvalidFirstArgType(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func(clientAddr bool, request string) {})
+		d.AddFunc("foo", func(clientAddr bool, request string) {})
 	})
 }
 
 func TestDispatcherInvalidSecondResType(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func() (response int, err float64) { return })
+		d.AddFunc("foo", func() (response int, err float64) { return })
 	})
 }
 
 func TestDispatcherTooManyArgs(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func(clientAddr string, foo, bar int) {})
+		d.AddFunc("foo", func(clientAddr string, foo, bar int) {})
 	})
 }
 
 func TestDispatcherTooManyRes(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func() (response int, err error, foobar string) { return })
+		d.AddFunc("foo", func() (response int, err error, foobar string) { return })
 	})
 }
 
 func TestDispatcherFuncArg(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func(req func()) {})
+		d.AddFunc("foo", func(req func()) {})
 	})
 }
 
 func TestDispatcherChanArg(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func(req chan int) {})
+		d.AddFunc("foo", func(req chan int) {})
 	})
 }
 
 func TestDispatcherInterfaceArg(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func(req io.Reader) {})
+		d.AddFunc("foo", func(req io.Reader) {})
 	})
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func(req interface{}) {})
+		d.AddFunc("foo", func(req interface{}) {})
 	})
 }
 
 func TestDispatcherUnsafePointerArg(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func(req unsafe.Pointer) {})
+		d.AddFunc("foo", func(req unsafe.Pointer) {})
 	})
 }
 
 func TestDispatcherFuncRes(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func() (res func()) { return })
+		d.AddFunc("foo", func() (res func()) { return })
 	})
 }
 
 func TestDispatcherChanRes(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func() (res chan int) { return })
+		d.AddFunc("foo", func() (res chan int) { return })
 	})
 }
 
 func TestDispatcherInterfaceRes(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func() (res io.Reader) { return })
+		d.AddFunc("foo", func() (res io.Reader) { return })
 	})
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func() (res interface{}) { return })
+		d.AddFunc("foo", func() (res interface{}) { return })
 	})
 }
 
 func TestDispatcherUnsafePointerRes(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func() (res unsafe.Pointer) { return })
+		d.AddFunc("foo", func() (res unsafe.Pointer) { return })
 	})
 }
 
@@ -113,14 +113,14 @@ func TestDispatcherStructWithInvalidFields(t *testing.T) {
 
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func(req *InvalidMsg) {})
+		d.AddFunc("foo", func(req *InvalidMsg) {})
 	})
 }
 
 func TestDispatcherInvalidMap(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func(req map[string]interface{}) {})
+		d.AddFunc("foo", func(req map[string]interface{}) {})
 	})
 }
 
@@ -132,7 +132,7 @@ func TestDispatcherPassStructArgByValue(t *testing.T) {
 
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func(request RequestType) {})
+		d.AddFunc("foo", func(request RequestType) {})
 	})
 }
 
@@ -144,7 +144,7 @@ func TestDispatcherReturnStructResByValue(t *testing.T) {
 
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func() (response ResponseType) { return })
+		d.AddFunc("foo", func() (response ResponseType) { return })
 	})
 }
 
@@ -156,7 +156,7 @@ func TestDispatcherPassStructArgNoExportedFields(t *testing.T) {
 
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func(req *RequestTypeNoExport) {})
+		d.AddFunc("foo", func(req *RequestTypeNoExport) {})
 	})
 }
 
@@ -168,7 +168,7 @@ func TestDispatcherReturnStructResNoExportedFields(t *testing.T) {
 
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterFunc("foo", func() (resp *ResponseTypeNoExport) { return })
+		d.AddFunc("foo", func() (resp *ResponseTypeNoExport) { return })
 	})
 }
 
@@ -182,7 +182,7 @@ func TestDispatcherStructsWithIdenticalFields(t *testing.T) {
 
 	d := NewDispatcher()
 
-	d.RegisterFunc("foo", func(request *Struct1) *Struct2 {
+	d.AddFunc("foo", func(request *Struct1) *Struct2 {
 		return &Struct2{
 			A: request.A,
 		}
@@ -208,7 +208,7 @@ func TestDispatcherStructsWithIdenticalFields(t *testing.T) {
 
 func TestDispatcherInvalidArgType(t *testing.T) {
 	d := NewDispatcher()
-	d.RegisterFunc("foo", func(request string) {})
+	d.AddFunc("foo", func(request string) {})
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		res, err := dc.Call("foo", 1234)
 		if err == nil {
@@ -222,7 +222,7 @@ func TestDispatcherInvalidArgType(t *testing.T) {
 
 func TestDispatcherUnknownFuncCall(t *testing.T) {
 	d := NewDispatcher()
-	d.RegisterFunc("foo", func(request string) {})
+	d.AddFunc("foo", func(request string) {})
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		res, err := dc.Call("UnknownFunc", 1234)
 		if err == nil {
@@ -236,7 +236,7 @@ func TestDispatcherUnknownFuncCall(t *testing.T) {
 
 func TestDispatcherEchoFuncCall(t *testing.T) {
 	d := NewDispatcher()
-	d.RegisterFunc("Echo", func(request string) string { return request })
+	d.AddFunc("Echo", func(request string) string { return request })
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		res, err := dc.Call("Echo", "foobar")
 		if err != nil {
@@ -264,7 +264,7 @@ func TestDispatcherStructArgCall(t *testing.T) {
 	}
 
 	d := NewDispatcher()
-	d.RegisterFunc("fooBar", func(request *RequestArg) *ResponseArg {
+	d.AddFunc("fooBar", func(request *RequestArg) *ResponseArg {
 		return &ResponseArg{
 			C: request.B,
 			D: request.A,
@@ -311,7 +311,7 @@ func TestDispatcherRecursiveStructArg(t *testing.T) {
 	}
 
 	d := NewDispatcher()
-	d.RegisterFunc("foo", func(req *RecMsg) *RecMsg { return req })
+	d.AddFunc("foo", func(req *RecMsg) *RecMsg { return req })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		reqs := &RecMsg{
@@ -338,7 +338,7 @@ func TestDispatcherMapArgCall(t *testing.T) {
 	d := NewDispatcher()
 
 	type MapT map[string]int
-	d.RegisterFunc("foo", func(m MapT) MapT { return m })
+	d.AddFunc("foo", func(m MapT) MapT { return m })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		reqm := MapT{
@@ -363,7 +363,7 @@ func TestDispatcherArrayArgCall(t *testing.T) {
 	d := NewDispatcher()
 
 	type ArrT [3]byte
-	d.RegisterFunc("foo", func(m ArrT) ArrT { return m })
+	d.AddFunc("foo", func(m ArrT) ArrT { return m })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		reqm := ArrT{'a', 'b', 'c'}
@@ -384,7 +384,7 @@ func TestDispatcherArrayArgCall(t *testing.T) {
 func TestDispatcherSliceArgCall(t *testing.T) {
 	d := NewDispatcher()
 
-	d.RegisterFunc("foo", func(m []byte) []byte { return m })
+	d.AddFunc("foo", func(m []byte) []byte { return m })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		reqm := []byte("foobar")
@@ -406,7 +406,7 @@ func TestDispatcherNoArgNoResCall(t *testing.T) {
 	d := NewDispatcher()
 
 	noArgNoResCalls := 0
-	d.RegisterFunc("NoArgNoRes", func() { noArgNoResCalls++ })
+	d.AddFunc("NoArgNoRes", func() { noArgNoResCalls++ })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		N := 10
@@ -431,7 +431,7 @@ func TestDispatcherOneArgNoResCall(t *testing.T) {
 
 	serverS := 0
 	clientS := 0
-	d.RegisterFunc("OneArgNoRes", func(n int) { serverS += n })
+	d.AddFunc("OneArgNoRes", func(n int) { serverS += n })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		for i := 0; i < 10; i++ {
@@ -456,7 +456,7 @@ func TestDispatcherTwoArgNoResCall(t *testing.T) {
 
 	serverS := 0
 	clientS := 0
-	d.RegisterFunc("TwoArgNoRes", func(clientAddr string, n int) { serverS += n })
+	d.AddFunc("TwoArgNoRes", func(clientAddr string, n int) { serverS += n })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		for i := 0; i < 10; i++ {
@@ -480,7 +480,7 @@ func TestDispatcherNoArgErrorResCall(t *testing.T) {
 	d := NewDispatcher()
 
 	var returnErr error
-	d.RegisterFunc("NoArgErrorRes", func() error { return returnErr })
+	d.AddFunc("NoArgErrorRes", func() error { return returnErr })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		returnErr = nil
@@ -508,7 +508,7 @@ func TestDispatcherNoArgErrorResCall(t *testing.T) {
 func TestDispatcherOneArgErrorResCall(t *testing.T) {
 	d := NewDispatcher()
 
-	d.RegisterFunc("OneArgErrorRes", func(r string) error { return fmt.Errorf("%s", r) })
+	d.AddFunc("OneArgErrorRes", func(r string) error { return fmt.Errorf("%s", r) })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		reqs := "foobar"
@@ -528,7 +528,7 @@ func TestDispatcherOneArgErrorResCall(t *testing.T) {
 func TestDispatcherTwoArgErrorResCall(t *testing.T) {
 	d := NewDispatcher()
 
-	d.RegisterFunc("TwoArgErrorRes", func(clientAddr string, r int) error { return fmt.Errorf("%d", r) })
+	d.AddFunc("TwoArgErrorRes", func(clientAddr string, r int) error { return fmt.Errorf("%d", r) })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		res, err := dc.Call("TwoArgErrorRes", 123)
@@ -547,7 +547,7 @@ func TestDispatcherTwoArgErrorResCall(t *testing.T) {
 func TestDispatcherNoArgOneResCall(t *testing.T) {
 	d := NewDispatcher()
 
-	d.RegisterFunc("NoArgOneResCall", func() string { return "foobar" })
+	d.AddFunc("NoArgOneResCall", func() string { return "foobar" })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		res, err := dc.Call("NoArgOneResCall", nil)
@@ -567,7 +567,7 @@ func TestDispatcherNoArgOneResCall(t *testing.T) {
 func TestDispatcherOneArgOneResCall(t *testing.T) {
 	d := NewDispatcher()
 
-	d.RegisterFunc("OneArgOneResCall", func(req int) int { return req })
+	d.AddFunc("OneArgOneResCall", func(req int) int { return req })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		reqs := 42
@@ -588,7 +588,7 @@ func TestDispatcherOneArgOneResCall(t *testing.T) {
 func TestDispatcherOneArgTwoResCall(t *testing.T) {
 	d := NewDispatcher()
 
-	d.RegisterFunc("OneArgTwoResCall", func(req int) (int, error) { return req, nil })
+	d.AddFunc("OneArgTwoResCall", func(req int) (int, error) { return req, nil })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		reqs := 442
@@ -609,7 +609,7 @@ func TestDispatcherOneArgTwoResCall(t *testing.T) {
 func TestDispatcherTwoArgOneResCall(t *testing.T) {
 	d := NewDispatcher()
 
-	d.RegisterFunc("TwoArgOneResCall", func(clientAddr string, req int) int { return req })
+	d.AddFunc("TwoArgOneResCall", func(clientAddr string, req int) int { return req })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		reqs := 142
@@ -630,7 +630,7 @@ func TestDispatcherTwoArgOneResCall(t *testing.T) {
 func TestDispatcherTwoArgTwoResCall(t *testing.T) {
 	d := NewDispatcher()
 
-	d.RegisterFunc("TwoArgTwoResCall", func(clientAddr string, req int) (int, error) { return req, nil })
+	d.AddFunc("TwoArgTwoResCall", func(clientAddr string, req int) (int, error) { return req, nil })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		reqs := 1423
@@ -655,7 +655,7 @@ func TestDispatcherSend(t *testing.T) {
 	ch := make(chan struct{}, N)
 	serverS := 0
 	clientS := 0
-	d.RegisterFunc("Sum", func(n int) {
+	d.AddFunc("Sum", func(n int) {
 		serverS += n
 		ch <- struct{}{}
 	})
@@ -677,7 +677,7 @@ func TestDispatcherSend(t *testing.T) {
 func TestDispatcherCallAsync(t *testing.T) {
 	d := NewDispatcher()
 
-	d.RegisterFunc("aaa", func(x int) int { return x })
+	d.AddFunc("aaa", func(x int) int { return x })
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		N := 10
@@ -712,7 +712,7 @@ func (s *testService) privateFunc() {}
 func TestDispatcherServicePassByValue(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
-		d.RegisterService("aaa", testService{})
+		d.AddService("aaa", testService{})
 	})
 }
 
@@ -720,7 +720,7 @@ func TestDispatcherServiceUnknownService(t *testing.T) {
 	service := &testService{}
 
 	d := NewDispatcher()
-	d.RegisterService("foobar", service)
+	d.AddService("foobar", service)
 
 	testDispatcherService(t, d, "barbaz", func(dc *DispatcherClient) {
 		res, err := dc.Call("Inc", nil)
@@ -737,7 +737,7 @@ func TestDispatcherServiceUnknownMethodCall(t *testing.T) {
 	service := &testService{}
 
 	d := NewDispatcher()
-	d.RegisterService("qwerty", service)
+	d.AddService("qwerty", service)
 
 	testDispatcherService(t, d, "qwerty", func(dc *DispatcherClient) {
 		res, err := dc.Call("unknownMethod", 123)
@@ -754,7 +754,7 @@ func TestDispatcherServicePrivateMethodCall(t *testing.T) {
 	service := &testService{}
 
 	d := NewDispatcher()
-	d.RegisterService("qwerty", service)
+	d.AddService("qwerty", service)
 
 	testDispatcherService(t, d, "qwerty", func(dc *DispatcherClient) {
 		res, err := dc.Call("privateFunc", nil)
@@ -771,7 +771,7 @@ func TestDispatcherService(t *testing.T) {
 	service := &testService{}
 
 	d := NewDispatcher()
-	d.RegisterService("qwerty", service)
+	d.AddService("qwerty", service)
 
 	testDispatcherService(t, d, "qwerty", func(dc *DispatcherClient) {
 		res, err := dc.Call("Add", 123)
@@ -814,8 +814,8 @@ func TestDispatcherServiceMultiple(t *testing.T) {
 	service1 := &testService{}
 	service2 := &testService{}
 
-	d.RegisterService("service1", service1)
-	d.RegisterService("service2", service2)
+	d.AddService("service1", service1)
+	d.AddService("service2", service2)
 
 	c, s := getClientServer(t, d)
 	defer s.Stop()
