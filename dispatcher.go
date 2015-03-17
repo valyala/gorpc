@@ -329,8 +329,10 @@ func dispatchRequest(serviceMap map[string]*serviceData, clientAddr string, req 
 			resp.Response = outArgs[0].Interface()
 		}
 	} else if len(outArgs) == 2 {
-		resp.Response = outArgs[0].Interface()
 		resp.Error = getErrorString(outArgs[1])
+		if resp.Error == "" {
+			resp.Response = outArgs[0].Interface()
+		}
 	}
 
 	return resp
