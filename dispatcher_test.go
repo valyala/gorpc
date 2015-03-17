@@ -188,11 +188,11 @@ func TestDispatcherStructsWithIdenticalFields(t *testing.T) {
 		}
 	})
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		reqs := &Struct1{
 			A: 12356,
 		}
-		res, err := fc.Call("foo", reqs)
+		res, err := dc.Call("foo", reqs)
 		if err != nil {
 			t.Fatalf("Unepxected error: [%s]", err)
 		}
@@ -209,8 +209,8 @@ func TestDispatcherStructsWithIdenticalFields(t *testing.T) {
 func TestDispatcherInvalidArgType(t *testing.T) {
 	d := NewDispatcher()
 	d.RegisterFunc("foo", func(request string) {})
-	testDispatcher(t, d, func(fc *DispatcherClient) {
-		res, err := fc.Call("foo", 1234)
+	testDispatcher(t, d, func(dc *DispatcherClient) {
+		res, err := dc.Call("foo", 1234)
 		if err == nil {
 			t.Fatalf("Expected non-nil error")
 		}
@@ -223,8 +223,8 @@ func TestDispatcherInvalidArgType(t *testing.T) {
 func TestDispatcherUnknownFuncCall(t *testing.T) {
 	d := NewDispatcher()
 	d.RegisterFunc("foo", func(request string) {})
-	testDispatcher(t, d, func(fc *DispatcherClient) {
-		res, err := fc.Call("UnknownFunc", 1234)
+	testDispatcher(t, d, func(dc *DispatcherClient) {
+		res, err := dc.Call("UnknownFunc", 1234)
 		if err == nil {
 			t.Fatalf("Expected non-nil error")
 		}
@@ -237,8 +237,8 @@ func TestDispatcherUnknownFuncCall(t *testing.T) {
 func TestDispatcherEchoFuncCall(t *testing.T) {
 	d := NewDispatcher()
 	d.RegisterFunc("Echo", func(request string) string { return request })
-	testDispatcher(t, d, func(fc *DispatcherClient) {
-		res, err := fc.Call("Echo", "foobar")
+	testDispatcher(t, d, func(dc *DispatcherClient) {
+		res, err := dc.Call("Echo", "foobar")
 		if err != nil {
 			t.Fatalf("Unexpected error: [%s]", err)
 		}
@@ -271,13 +271,13 @@ func TestDispatcherStructArgCall(t *testing.T) {
 		}
 	})
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		// verify call by reference
 		reqs := &RequestArg{
 			A: 123,
 			B: "7822",
 		}
-		res, err := fc.Call("fooBar", reqs)
+		res, err := dc.Call("fooBar", reqs)
 		if err != nil {
 			t.Fatalf("Unexpected error: [%s]", err)
 		}
@@ -292,7 +292,7 @@ func TestDispatcherStructArgCall(t *testing.T) {
 		// verify call by value
 		reqs.A = 7889
 		reqs.B = "alkjjal"
-		if res, err = fc.Call("fooBar", *reqs); err != nil {
+		if res, err = dc.Call("fooBar", *reqs); err != nil {
 			t.Fatalf("Unexpected error: [%s]", err)
 		}
 		if ress, ok = res.(*ResponseArg); !ok {
@@ -313,14 +313,14 @@ func TestDispatcherRecursiveStructArg(t *testing.T) {
 	d := NewDispatcher()
 	d.RegisterFunc("foo", func(req *RecMsg) *RecMsg { return req })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		reqs := &RecMsg{
 			A: 1,
 			Rec: &RecMsg{
 				A: 2,
 			},
 		}
-		res, err := fc.Call("foo", reqs)
+		res, err := dc.Call("foo", reqs)
 		if err != nil {
 			t.Fatalf("Unexpected error: [%s]", err)
 		}
@@ -340,12 +340,12 @@ func TestDispatcherMapArgCall(t *testing.T) {
 	type MapT map[string]int
 	d.RegisterFunc("foo", func(m MapT) MapT { return m })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		reqm := MapT{
 			"foo": 1,
 			"bar": 42,
 		}
-		res, err := fc.Call("foo", reqm)
+		res, err := dc.Call("foo", reqm)
 		if err != nil {
 			t.Fatalf("Unexpected error: [%s]", err)
 		}
@@ -365,9 +365,9 @@ func TestDispatcherArrayArgCall(t *testing.T) {
 	type ArrT [3]byte
 	d.RegisterFunc("foo", func(m ArrT) ArrT { return m })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		reqm := ArrT{'a', 'b', 'c'}
-		res, err := fc.Call("foo", reqm)
+		res, err := dc.Call("foo", reqm)
 		if err != nil {
 			t.Fatalf("Unexpected error: [%s]", err)
 		}
@@ -386,9 +386,9 @@ func TestDispatcherSliceArgCall(t *testing.T) {
 
 	d.RegisterFunc("foo", func(m []byte) []byte { return m })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		reqm := []byte("foobar")
-		res, err := fc.Call("foo", reqm)
+		res, err := dc.Call("foo", reqm)
 		if err != nil {
 			t.Fatalf("Unexpected error: [%s]", err)
 		}
@@ -408,10 +408,10 @@ func TestDispatcherNoArgNoResCall(t *testing.T) {
 	noArgNoResCalls := 0
 	d.RegisterFunc("NoArgNoRes", func() { noArgNoResCalls++ })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		N := 10
 		for i := 0; i < N; i++ {
-			res, err := fc.Call("NoArgNoRes", "ignoreThis")
+			res, err := dc.Call("NoArgNoRes", "ignoreThis")
 			if err != nil {
 				t.Fatalf("Unexpected error: [%s]", err)
 			}
@@ -433,9 +433,9 @@ func TestDispatcherOneArgNoResCall(t *testing.T) {
 	clientS := 0
 	d.RegisterFunc("OneArgNoRes", func(n int) { serverS += n })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		for i := 0; i < 10; i++ {
-			res, err := fc.Call("OneArgNoRes", i)
+			res, err := dc.Call("OneArgNoRes", i)
 			if err != nil {
 				t.Fatalf("Unexpected error: [%s]", err)
 			}
@@ -458,9 +458,9 @@ func TestDispatcherTwoArgNoResCall(t *testing.T) {
 	clientS := 0
 	d.RegisterFunc("TwoArgNoRes", func(clientAddr string, n int) { serverS += n })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		for i := 0; i < 10; i++ {
-			res, err := fc.Call("TwoArgNoRes", i)
+			res, err := dc.Call("TwoArgNoRes", i)
 			if err != nil {
 				t.Fatalf("Unexpected error: [%s]", err)
 			}
@@ -482,9 +482,9 @@ func TestDispatcherNoArgErrorResCall(t *testing.T) {
 	var returnErr error
 	d.RegisterFunc("NoArgErrorRes", func() error { return returnErr })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		returnErr = nil
-		res, err := fc.Call("NoArgErrorRes", nil)
+		res, err := dc.Call("NoArgErrorRes", nil)
 		if err != nil {
 			t.Fatalf("Unexpected error: [%s]", err)
 		}
@@ -493,7 +493,7 @@ func TestDispatcherNoArgErrorResCall(t *testing.T) {
 		}
 
 		returnErr = fmt.Errorf("foobar")
-		if res, err = fc.Call("NoArgErrorRes", nil); err == nil {
+		if res, err = dc.Call("NoArgErrorRes", nil); err == nil {
 			t.Fatalf("Unexpected nil error")
 		}
 		if err.Error() != returnErr.Error() {
@@ -510,9 +510,9 @@ func TestDispatcherOneArgErrorResCall(t *testing.T) {
 
 	d.RegisterFunc("OneArgErrorRes", func(r string) error { return fmt.Errorf("%s", r) })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		reqs := "foobar"
-		res, err := fc.Call("OneArgErrorRes", reqs)
+		res, err := dc.Call("OneArgErrorRes", reqs)
 		if err == nil {
 			t.Fatalf("Unexpected nil error")
 		}
@@ -530,8 +530,8 @@ func TestDispatcherTwoArgErrorResCall(t *testing.T) {
 
 	d.RegisterFunc("TwoArgErrorRes", func(clientAddr string, r int) error { return fmt.Errorf("%d", r) })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
-		res, err := fc.Call("TwoArgErrorRes", 123)
+	testDispatcher(t, d, func(dc *DispatcherClient) {
+		res, err := dc.Call("TwoArgErrorRes", 123)
 		if err == nil {
 			t.Fatalf("Unexpected nil error")
 		}
@@ -549,8 +549,8 @@ func TestDispatcherNoArgOneResCall(t *testing.T) {
 
 	d.RegisterFunc("NoArgOneResCall", func() string { return "foobar" })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
-		res, err := fc.Call("NoArgOneResCall", nil)
+	testDispatcher(t, d, func(dc *DispatcherClient) {
+		res, err := dc.Call("NoArgOneResCall", nil)
 		if err != nil {
 			t.Fatalf("Unexpected error: [%s]", err)
 		}
@@ -569,9 +569,9 @@ func TestDispatcherOneArgOneResCall(t *testing.T) {
 
 	d.RegisterFunc("OneArgOneResCall", func(req int) int { return req })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		reqs := 42
-		res, err := fc.Call("OneArgOneResCall", reqs)
+		res, err := dc.Call("OneArgOneResCall", reqs)
 		if err != nil {
 			t.Fatalf("Unexpected error: [%s]", err)
 		}
@@ -590,9 +590,9 @@ func TestDispatcherOneArgTwoResCall(t *testing.T) {
 
 	d.RegisterFunc("OneArgTwoResCall", func(req int) (int, error) { return req, nil })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		reqs := 442
-		res, err := fc.Call("OneArgTwoResCall", reqs)
+		res, err := dc.Call("OneArgTwoResCall", reqs)
 		if err != nil {
 			t.Fatalf("Unexpected error: [%s]", err)
 		}
@@ -611,9 +611,9 @@ func TestDispatcherTwoArgOneResCall(t *testing.T) {
 
 	d.RegisterFunc("TwoArgOneResCall", func(clientAddr string, req int) int { return req })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		reqs := 142
-		res, err := fc.Call("TwoArgOneResCall", reqs)
+		res, err := dc.Call("TwoArgOneResCall", reqs)
 		if err != nil {
 			t.Fatalf("Unexpected error: [%s]", err)
 		}
@@ -632,9 +632,9 @@ func TestDispatcherTwoArgTwoResCall(t *testing.T) {
 
 	d.RegisterFunc("TwoArgTwoResCall", func(clientAddr string, req int) (int, error) { return req, nil })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		reqs := 1423
-		res, err := fc.Call("TwoArgTwoResCall", reqs)
+		res, err := dc.Call("TwoArgTwoResCall", reqs)
 		if err != nil {
 			t.Fatalf("Unexpected error: [%s]", err)
 		}
@@ -660,9 +660,9 @@ func TestDispatcherSend(t *testing.T) {
 		ch <- struct{}{}
 	})
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		for i := 0; i < N; i++ {
-			fc.Send("Sum", i)
+			dc.Send("Sum", i)
 			clientS += i
 		}
 		for i := 0; i < N; i++ {
@@ -679,11 +679,11 @@ func TestDispatcherCallAsync(t *testing.T) {
 
 	d.RegisterFunc("aaa", func(x int) int { return x })
 
-	testDispatcher(t, d, func(fc *DispatcherClient) {
+	testDispatcher(t, d, func(dc *DispatcherClient) {
 		N := 10
 		ar := make([]*AsyncResult, N)
 		for i := 0; i < N; i++ {
-			ar[i] = fc.CallAsync("aaa", i)
+			ar[i] = dc.CallAsync("aaa", i)
 		}
 		for i := 0; i < N; i++ {
 			r := ar[i]
@@ -726,9 +726,9 @@ func TestDispatcherServiceUnknownMethodCall(t *testing.T) {
 	defer s.Stop()
 	defer c.Stop()
 
-	fc := d.NewServiceClient("qwerty", c)
+	dc := d.NewServiceClient("qwerty", c)
 
-	res, err := fc.Call("unknownMethod", 123)
+	res, err := dc.Call("unknownMethod", 123)
 	if err == nil {
 		t.Fatalf("Error expected")
 	}
@@ -747,9 +747,9 @@ func TestDispatcherServicePrivateMethodCall(t *testing.T) {
 	defer s.Stop()
 	defer c.Stop()
 
-	fc := d.NewServiceClient("qwerty", c)
+	dc := d.NewServiceClient("qwerty", c)
 
-	res, err := fc.Call("privateFunc", nil)
+	res, err := dc.Call("privateFunc", nil)
 	if err == nil {
 		t.Fatalf("Error expected")
 	}
@@ -768,9 +768,9 @@ func TestDispatcherService(t *testing.T) {
 	defer s.Stop()
 	defer c.Stop()
 
-	fc := d.NewServiceClient("qwerty", c)
+	dc := d.NewServiceClient("qwerty", c)
 
-	res, err := fc.Call("Add", 123)
+	res, err := dc.Call("Add", 123)
 	if err != nil {
 		t.Fatalf("Unexpected error: [%s]", err)
 	}
@@ -781,7 +781,7 @@ func TestDispatcherService(t *testing.T) {
 		t.Fatalf("Unexpected service state: %d. Expected 123", service.state)
 	}
 
-	if res, err = fc.Call("Inc", nil); err != nil {
+	if res, err = dc.Call("Inc", nil); err != nil {
 		t.Fatalf("Unexpected error: [%s]", err)
 	}
 	if res != nil {
@@ -791,7 +791,7 @@ func TestDispatcherService(t *testing.T) {
 		t.Fatalf("Unexpected service state: %d. Expected 124", service.state)
 	}
 
-	if res, err = fc.Call("Get", nil); err != nil {
+	if res, err = dc.Call("Get", nil); err != nil {
 		t.Fatalf("Unexpected error: [%s]", err)
 	}
 	ress, ok := res.(int)
@@ -803,13 +803,13 @@ func TestDispatcherService(t *testing.T) {
 	}
 }
 
-func testDispatcher(t *testing.T, d *Dispatcher, f func(fc *DispatcherClient)) {
+func testDispatcher(t *testing.T, d *Dispatcher, f func(dc *DispatcherClient)) {
 	c, s := getClientServer(t, d)
 	defer s.Stop()
 	defer c.Stop()
 
-	fc := d.NewFuncClient(c)
-	f(fc)
+	dc := d.NewFuncClient(c)
+	f(dc)
 }
 
 func getClientServer(t *testing.T, d *Dispatcher) (c *Client, s *Server) {
