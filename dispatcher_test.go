@@ -704,9 +704,59 @@ func TestDispatcherCallAsync(t *testing.T) {
 
 type testService struct{ state int }
 
-func (s *testService) Inc()      { s.state++ }
-func (s *testService) Add(n int) { s.state += n }
-func (s *testService) Get() int  { return s.state }
+func (s *testService) Inc()         { s.state++ }
+func (s *testService) Add(n int)    { s.state += n }
+func (s *testService) Get() int     { return s.state }
+func (s *testService) privateFunc() {}
+
+func TestDispatcherServicePassByValue(t *testing.T) {
+	d := NewDispatcher()
+	testPanic(t, func() {
+		d.RegisterService("aaa", testService{})
+	})
+}
+
+func TestDispatcherServiceUnknownMethodCall(t *testing.T) {
+	service := &testService{}
+
+	d := NewDispatcher()
+	d.RegisterService("qwerty", service)
+
+	c, s := getClientServer(t, d)
+	defer s.Stop()
+	defer c.Stop()
+
+	fc := d.NewServiceClient("qwerty", c)
+
+	res, err := fc.Call("unknownMethod", 123)
+	if err == nil {
+		t.Fatalf("Error expected")
+	}
+	if res != nil {
+		t.Fatalf("Unexpected response: [%+v]. Expected nil", res)
+	}
+}
+
+func TestDispatcherServicePrivateMethodCall(t *testing.T) {
+	service := &testService{}
+
+	d := NewDispatcher()
+	d.RegisterService("qwerty", service)
+
+	c, s := getClientServer(t, d)
+	defer s.Stop()
+	defer c.Stop()
+
+	fc := d.NewServiceClient("qwerty", c)
+
+	res, err := fc.Call("privateFunc", nil)
+	if err == nil {
+		t.Fatalf("Error expected")
+	}
+	if res != nil {
+		t.Fatalf("Unexpected response: [%+v]. Expected nil", res)
+	}
+}
 
 func TestDispatcherService(t *testing.T) {
 	service := &testService{}

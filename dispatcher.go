@@ -313,10 +313,12 @@ func dispatchRequest(serviceMap map[string]*serviceData, clientAddr string, req 
 	var inArgs []reflect.Value
 	reqv := reflect.ValueOf(req.Request)
 	if serviceName != "" {
-		if fd.inNum == 2 {
+		if fd.inNum == 3 {
 			inArgs = []reflect.Value{s.service, reflect.ValueOf(clientAddr), reqv}
-		} else if fd.inNum == 1 {
+		} else if fd.inNum == 2 {
 			inArgs = []reflect.Value{s.service, reqv}
+		} else {
+			inArgs = []reflect.Value{s.service}
 		}
 	} else {
 		if fd.inNum == 2 {
