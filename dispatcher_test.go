@@ -702,21 +702,76 @@ func TestDispatcherCallAsync(t *testing.T) {
 	})
 }
 
-func testDispatcher(t *testing.T, d *Dispatcher, f func(fc *DispatcherClient)) {
-	addr := getRandomAddr()
-	s := NewTCPServer(addr, d.HandlerFunc())
-	if err := s.Start(); err != nil {
-		t.Fatalf("Error when starting server: [%s]", err)
-	}
-	defer s.Stop()
+type testService struct{ state int }
 
-	c := NewTCPClient(addr)
-	c.Start()
+func (s *testService) Inc()      { s.state++ }
+func (s *testService) Add(n int) { s.state += n }
+func (s *testService) Get() int  { return s.state }
+
+func TestDispatcherService(t *testing.T) {
+	service := &testService{}
+
+	d := NewDispatcher()
+	d.RegisterService("qwerty", service)
+
+	c, s := getClientServer(t, d)
+	defer s.Stop()
+	defer c.Stop()
+
+	fc := d.NewServiceClient("qwerty", c)
+
+	res, err := fc.Call("Add", 123)
+	if err != nil {
+		t.Fatalf("Unexpected error: [%s]", err)
+	}
+	if res != nil {
+		t.Fatalf("Unexpected response: [%+v]", res)
+	}
+	if service.state != 123 {
+		t.Fatalf("Unexpected service state: %d. Expected 123", service.state)
+	}
+
+	if res, err = fc.Call("Inc", nil); err != nil {
+		t.Fatalf("Unexpected error: [%s]", err)
+	}
+	if res != nil {
+		t.Fatalf("Unexpected response: [%+v]", res)
+	}
+	if service.state != 124 {
+		t.Fatalf("Unexpected service state: %d. Expected 124", service.state)
+	}
+
+	if res, err = fc.Call("Get", nil); err != nil {
+		t.Fatalf("Unexpected error: [%s]", err)
+	}
+	ress, ok := res.(int)
+	if !ok {
+		t.Fatalf("Unexpected response type: %T. Expected int", res)
+	}
+	if ress != service.state {
+		t.Fatalf("Unexpected response: [%d]. Expected [%s]", ress, service.state)
+	}
+}
+
+func testDispatcher(t *testing.T, d *Dispatcher, f func(fc *DispatcherClient)) {
+	c, s := getClientServer(t, d)
+	defer s.Stop()
 	defer c.Stop()
 
 	fc := d.NewFuncClient(c)
-
 	f(fc)
+}
+
+func getClientServer(t *testing.T, d *Dispatcher) (c *Client, s *Server) {
+	addr := getRandomAddr()
+	s = NewTCPServer(addr, d.HandlerFunc())
+	if err := s.Start(); err != nil {
+		t.Fatalf("Error when starting server: [%s]", err)
+	}
+
+	c = NewTCPClient(addr)
+	c.Start()
+	return
 }
 
 func testPanic(t *testing.T, f func()) {

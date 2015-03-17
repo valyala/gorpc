@@ -62,6 +62,10 @@ func (d *Dispatcher) RegisterService(serviceName string, service interface{}) {
 	funcMap := make(map[string]*funcData)
 
 	st := reflect.TypeOf(service)
+	if st.Kind() == reflect.Struct {
+		logPanic("gorpc.Dispatcher: service [%s] must be a pointer to struct, i.e. *%s", serviceName, st)
+	}
+
 	for i := 0; i < st.NumMethod(); i++ {
 		mv := st.Method(i)
 
@@ -78,7 +82,7 @@ func (d *Dispatcher) RegisterService(serviceName string, service interface{}) {
 		if fd.inNum, fd.outNum, err = validateFunc(funcName, fd.fv, true); err != nil {
 			logPanic("gorpc.Dispatcher: %s", err)
 		}
-		funcMap[funcName] = fd
+		funcMap[mv.Name] = fd
 	}
 
 	if len(funcMap) == 0 {
@@ -131,7 +135,7 @@ func validateFunc(funcName string, fv reflect.Value, isMethod bool) (inNum, outN
 		return
 	}
 
-	if inNum > 0 {
+	if inNum > dt {
 		if err = registerType("request", funcName, ft.In(inNum-1)); err != nil {
 			return
 		}
@@ -367,6 +371,13 @@ type DispatcherClient struct {
 func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
 	return &DispatcherClient{
 		c: c,
+	}
+}
+
+func (d *Dispatcher) NewServiceClient(serviceName string, c *Client) *DispatcherClient {
+	return &DispatcherClient{
+		c:           c,
+		serviceName: serviceName,
 	}
 }
 
