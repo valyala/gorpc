@@ -1,6 +1,7 @@
 package gorpc
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"testing"
@@ -101,6 +102,25 @@ func TestDispatcherUnsafePointerRes(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
 		d.RegisterFunc("foo", func() (res unsafe.Pointer) { return })
+	})
+}
+
+func TestDispatcherStructWithInvalidFields(t *testing.T) {
+	type InvalidMsg struct {
+		B int
+		A io.Reader
+	}
+
+	d := NewDispatcher()
+	testPanic(t, func() {
+		d.RegisterFunc("foo", func(req *InvalidMsg) {})
+	})
+}
+
+func TestDispatcherInvalidMap(t *testing.T) {
+	d := NewDispatcher()
+	testPanic(t, func() {
+		d.RegisterFunc("foo", func(req map[string]interface{}) {})
 	})
 }
 
@@ -314,6 +334,74 @@ func TestDispatcherRecursiveStructArg(t *testing.T) {
 	})
 }
 
+func TestDispatcherMapArgCall(t *testing.T) {
+	d := NewDispatcher()
+
+	type MapT map[string]int
+	d.RegisterFunc("foo", func(m MapT) MapT { return m })
+
+	testDispatcher(t, d, func(fc *DispatcherClient) {
+		reqm := MapT{
+			"foo": 1,
+			"bar": 42,
+		}
+		res, err := fc.Call("foo", reqm)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		resm, ok := res.(MapT)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected %T", res, reqm)
+		}
+		if resm["foo"] != reqm["foo"] || resm["bar"] != reqm["bar"] {
+			t.Fatalf("Unexpected response: [%+v]. Expected [%+v]", resm, reqm)
+		}
+	})
+}
+
+func TestDispatcherArrayArgCall(t *testing.T) {
+	d := NewDispatcher()
+
+	type ArrT [3]byte
+	d.RegisterFunc("foo", func(m ArrT) ArrT { return m })
+
+	testDispatcher(t, d, func(fc *DispatcherClient) {
+		reqm := ArrT{'a', 'b', 'c'}
+		res, err := fc.Call("foo", reqm)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		resm, ok := res.(ArrT)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected %T", res, reqm)
+		}
+		if !bytes.Equal(resm[:], reqm[:]) {
+			t.Fatalf("Unexpected response: [%+v]. Expected [%+v]", resm, reqm)
+		}
+	})
+}
+
+func TestDispatcherSliceArgCall(t *testing.T) {
+	d := NewDispatcher()
+
+	d.RegisterFunc("foo", func(m []byte) []byte { return m })
+
+	testDispatcher(t, d, func(fc *DispatcherClient) {
+		reqm := []byte("foobar")
+		res, err := fc.Call("foo", reqm)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		resm, ok := res.([]byte)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected %T", res, reqm)
+		}
+		if !bytes.Equal(resm, reqm) {
+			t.Fatalf("Unexpected response: [%+v]. Expected [%+v]", resm, reqm)
+		}
+	})
+}
+
 func TestDispatcherNoArgNoResCall(t *testing.T) {
 	d := NewDispatcher()
 
@@ -417,6 +505,45 @@ func TestDispatcherNoArgErrorResCall(t *testing.T) {
 	})
 }
 
+func TestDispatcherOneArgErrorResCall(t *testing.T) {
+	d := NewDispatcher()
+
+	d.RegisterFunc("OneArgErrorRes", func(r string) error { return fmt.Errorf("%s", r) })
+
+	testDispatcher(t, d, func(fc *DispatcherClient) {
+		reqs := "foobar"
+		res, err := fc.Call("OneArgErrorRes", reqs)
+		if err == nil {
+			t.Fatalf("Unexpected nil error")
+		}
+		if err.Error() != reqs {
+			t.Fatalf("Unexpected error: [%s]. Expected [%s]", err, reqs)
+		}
+		if res != nil {
+			t.Fatalf("Unexpected response: [%+v]", res)
+		}
+	})
+}
+
+func TestDispatcherTwoArgErrorResCall(t *testing.T) {
+	d := NewDispatcher()
+
+	d.RegisterFunc("TwoArgErrorRes", func(clientAddr string, r int) error { return fmt.Errorf("%d", r) })
+
+	testDispatcher(t, d, func(fc *DispatcherClient) {
+		res, err := fc.Call("TwoArgErrorRes", 123)
+		if err == nil {
+			t.Fatalf("Unexpected nil error")
+		}
+		if err.Error() != fmt.Sprintf("%d", 123) {
+			t.Fatalf("Unexpected error: [%s]. Expected [123]", err)
+		}
+		if res != nil {
+			t.Fatalf("Unexpected response: [%+v]", res)
+		}
+	})
+}
+
 func TestDispatcherNoArgOneResCall(t *testing.T) {
 	d := NewDispatcher()
 
@@ -433,6 +560,90 @@ func TestDispatcherNoArgOneResCall(t *testing.T) {
 		}
 		if ress != "foobar" {
 			t.Fatalf("Unexpected response [%s]. Expected [foobar]", ress)
+		}
+	})
+}
+
+func TestDispatcherOneArgOneResCall(t *testing.T) {
+	d := NewDispatcher()
+
+	d.RegisterFunc("OneArgOneResCall", func(req int) int { return req })
+
+	testDispatcher(t, d, func(fc *DispatcherClient) {
+		reqs := 42
+		res, err := fc.Call("OneArgOneResCall", reqs)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		ress, ok := res.(int)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected int", res)
+		}
+		if ress != reqs {
+			t.Fatalf("Unexpected response [%d]. Expected [%d]", ress, reqs)
+		}
+	})
+}
+
+func TestDispatcherOneArgTwoResCall(t *testing.T) {
+	d := NewDispatcher()
+
+	d.RegisterFunc("OneArgTwoResCall", func(req int) (int, error) { return req, nil })
+
+	testDispatcher(t, d, func(fc *DispatcherClient) {
+		reqs := 442
+		res, err := fc.Call("OneArgTwoResCall", reqs)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		ress, ok := res.(int)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected int", res)
+		}
+		if ress != reqs {
+			t.Fatalf("Unexpected response [%d]. Expected [%d]", ress, reqs)
+		}
+	})
+}
+
+func TestDispatcherTwoArgOneResCall(t *testing.T) {
+	d := NewDispatcher()
+
+	d.RegisterFunc("TwoArgOneResCall", func(clientAddr string, req int) int { return req })
+
+	testDispatcher(t, d, func(fc *DispatcherClient) {
+		reqs := 142
+		res, err := fc.Call("TwoArgOneResCall", reqs)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		ress, ok := res.(int)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected int", res)
+		}
+		if ress != reqs {
+			t.Fatalf("Unexpected response [%d]. Expected [%d]", ress, reqs)
+		}
+	})
+}
+
+func TestDispatcherTwoArgTwoResCall(t *testing.T) {
+	d := NewDispatcher()
+
+	d.RegisterFunc("TwoArgTwoResCall", func(clientAddr string, req int) (int, error) { return req, nil })
+
+	testDispatcher(t, d, func(fc *DispatcherClient) {
+		reqs := 1423
+		res, err := fc.Call("TwoArgTwoResCall", reqs)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		ress, ok := res.(int)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected int", res)
+		}
+		if ress != reqs {
+			t.Fatalf("Unexpected response [%d]. Expected [%d]", ress, reqs)
 		}
 	})
 }
