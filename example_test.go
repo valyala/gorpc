@@ -169,7 +169,7 @@ func ExampleDispatcher_AddFunc() {
 	// The second return value must have error type.
 	d.AddFunc("OneArgTwoRets", func(request []string) ([]string, error) {
 		if len(request) == 42 {
-			return nil, errors.New("need 42 strings!")
+			return nil, errors.New("need 42 strings")
 		}
 		return request, nil
 	})
