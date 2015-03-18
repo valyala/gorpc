@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -322,11 +321,11 @@ func clientHandler(c *Client) {
 		case <-c.clientStopChan:
 			return
 		case <-dialChan:
-			atomic.AddUint64(&c.Stats.DialCalls, 1)
+			c.Stats.incDialCalls()
 		}
 
 		if err != nil {
-			atomic.AddUint64(&c.Stats.DialErrors, 1)
+			c.Stats.incDialErrors()
 			continue
 		}
 		clientHandleConnection(c, conn)
@@ -509,6 +508,6 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 		}
 
 		m.Done <- struct{}{}
-		atomic.AddUint64(&c.Stats.RPCCalls, 1)
+		c.Stats.incRPCCalls()
 	}
 }

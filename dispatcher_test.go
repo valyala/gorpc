@@ -179,6 +179,40 @@ func TestDispatcherReturnStructResNoExportedFields(t *testing.T) {
 	})
 }
 
+func TestDispatcherMultipleFuncs(t *testing.T) {
+	d := NewDispatcher()
+
+	d.AddFunc("foo", func(a int) int { return a })
+	d.AddFunc("bar", func(b string) string { return b })
+
+	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
+		reqa := 4327
+		res, err := dc.Call("foo", reqa)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		resa, ok := res.(int)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected int", res)
+		}
+		if resa != reqa {
+			t.Fatalf("Unexpected response: %d. Expected %d", resa, reqa)
+		}
+
+		reqb := "aaa"
+		if res, err = dc.Call("bar", reqb); err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		resb, ok := res.(string)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected string", res)
+		}
+		if resb != reqb {
+			t.Fatalf("Unexpected response: [%s]. Expected [%s]", resb, reqb)
+		}
+	})
+}
+
 func TestDispatcherStructsWithIdenticalFields(t *testing.T) {
 	type Struct1 struct {
 		A int
@@ -723,6 +757,29 @@ func TestDispatcherServicePassByValue(t *testing.T) {
 	})
 }
 
+func TestDispatcherServiceWithoutName(t *testing.T) {
+	service := &testService{}
+
+	d := NewDispatcher()
+	testPanic(t, func() {
+		d.AddService("", service)
+	})
+}
+
+type testServiceWithoutMethods struct{}
+
+func (s *testServiceWithoutMethods) privateMethod1() {}
+func (s *testServiceWithoutMethods) privateMethod2() {}
+
+func TestDispatcherServiceWithoutPublicMethods(t *testing.T) {
+	service := &testServiceWithoutMethods{}
+
+	d := NewDispatcher()
+	testPanic(t, func() {
+		d.AddService("foobar", service)
+	})
+}
+
 func TestDispatcherServiceUnknownService(t *testing.T) {
 	service := &testService{}
 
@@ -852,6 +909,69 @@ func TestDispatcherServiceMultiple(t *testing.T) {
 	}
 }
 
+type testNilService struct{}
+
+func (s *testNilService) Foo(x int) int { return x }
+
+func TestDispatcherNilService(t *testing.T) {
+	d := NewDispatcher()
+
+	var service *testNilService
+	d.AddService("nil", service)
+
+	testDispatcherService(t, d, "nil", func(dc *DispatcherClient) {
+		res, err := dc.Call("Foo", 123)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		ress, ok := res.(int)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected int", res)
+		}
+		if ress != 123 {
+			t.Fatalf("Unexpected response: %d. Expected %d", ress, 123)
+		}
+	})
+}
+
+func TestDispatcherFuncAndService(t *testing.T) {
+	d := NewDispatcher()
+
+	service := &testService{}
+	d.AddService("foo", service)
+
+	barCalls := 0
+	d.AddFunc("bar", func() { barCalls++ })
+
+	c, s := getClientServer(t, d)
+	defer s.Stop()
+	defer c.Stop()
+
+	dcc := d.NewFuncClient(c)
+	dcs := d.NewServiceClient("foo", c)
+
+	res, err := dcc.Call("bar", nil)
+	if err != nil {
+		t.Fatalf("Unexpected error: [%s]", err)
+	}
+	if res != nil {
+		t.Fatalf("Unexpected response: [%+v]", res)
+	}
+	if barCalls != 1 {
+		t.Fatalf("Unexpected barCalls=%d. Expected 1", barCalls)
+	}
+
+	if res, err = dcs.Call("Add", 123); err != nil {
+		t.Fatalf("Unexpected error: [%s]", err)
+	}
+	if res != nil {
+		t.Fatalf("Unexpected response: [%+v]", res)
+	}
+	if service.state != 123 {
+		t.Fatalf("Unexpected service state: %d. Expected 123", service.state)
+	}
+}
+
 func testDispatcherService(t *testing.T, d *Dispatcher, serviceName string, f func(dc *DispatcherClient)) {
 	c, s := getClientServer(t, d)
 	defer s.Stop()
@@ -872,7 +992,7 @@ func testDispatcherFunc(t *testing.T, d *Dispatcher, f func(dc *DispatcherClient
 
 func getClientServer(t *testing.T, d *Dispatcher) (c *Client, s *Server) {
 	addr := getRandomAddr()
-	s = NewTCPServer(addr, d.HandlerFunc())
+	s = NewTCPServer(addr, d.NewHandlerFunc())
 	if err := s.Start(); err != nil {
 		t.Fatalf("Error when starting server: [%s]", err)
 	}

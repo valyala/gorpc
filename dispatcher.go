@@ -1,6 +1,7 @@
 package gorpc
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -9,19 +10,25 @@ import (
 
 // Dispatcher helps constructing HandlerFunc for dispatching across multiple
 // functions and/or services.
+//
+// Dispatcher also automatically registers all request and response types
+// for all functions and/or methods registered via AddFunc() and AddService(),
+// so there is no need in calling RegisterType() for them.
+//
+// See examples for details.
 type Dispatcher struct {
 	serviceMap map[string]*serviceData
 }
 
 type serviceData struct {
-	service reflect.Value
+	sv      reflect.Value
 	funcMap map[string]*funcData
 }
 
 type funcData struct {
-	inNum  int
-	outNum int
-	fv     reflect.Value
+	inNum int
+	reqt  reflect.Type
+	fv    reflect.Value
 }
 
 // NewDispatcher returns new dispatcher.
@@ -32,6 +39,21 @@ func NewDispatcher() *Dispatcher {
 }
 
 // AddFunc registers the given function f under the name funcName.
+//
+// The function must accept zero, one or two input arguments.
+// If the function has two arguments, then the first argument must have
+// string type - the server will pass client address in this parameter.
+//
+// The function must return zero, one or two values.
+//   * If the function has two return values, then the second value must have
+//     error type - the server will propagate this error to the client.
+//
+//   * If the function returns only error value, then the server treats it
+//     as error, not return value, when sending to the client.
+//
+// Arbitrary number of functions can be registered in the dispatcher.
+//
+// Se examples for details.
 func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
 	sd, ok := d.serviceMap[""]
 	if !ok {
@@ -49,13 +71,18 @@ func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
 		fv: reflect.Indirect(reflect.ValueOf(f)),
 	}
 	var err error
-	if fd.inNum, fd.outNum, err = validateFunc(funcName, fd.fv, false); err != nil {
+	if fd.inNum, fd.reqt, err = validateFunc(funcName, fd.fv, false); err != nil {
 		logPanic("gorpc.Disaptcher: %s", err)
 	}
 	sd.funcMap[funcName] = fd
 }
 
 // AddService registers the given service under the name serviceName.
+//
+// Only public methods are registered, so the service must have at least
+// one public method.
+//
+// All public methods must conform requirements described in AddFunc().
 func (d *Dispatcher) AddService(serviceName string, service interface{}) {
 	if serviceName == "" {
 		logPanic("gorpc.Dispatcher: serviceName cannot be empty")
@@ -84,7 +111,7 @@ func (d *Dispatcher) AddService(serviceName string, service interface{}) {
 			fv: mv.Func,
 		}
 		var err error
-		if fd.inNum, fd.outNum, err = validateFunc(funcName, fd.fv, true); err != nil {
+		if fd.inNum, fd.reqt, err = validateFunc(funcName, fd.fv, true); err != nil {
 			logPanic("gorpc.Dispatcher: %s", err)
 		}
 		funcMap[mv.Name] = fd
@@ -95,12 +122,12 @@ func (d *Dispatcher) AddService(serviceName string, service interface{}) {
 	}
 
 	d.serviceMap[serviceName] = &serviceData{
-		service: reflect.ValueOf(service),
+		sv:      reflect.ValueOf(service),
 		funcMap: funcMap,
 	}
 }
 
-func validateFunc(funcName string, fv reflect.Value, isMethod bool) (inNum, outNum int, err error) {
+func validateFunc(funcName string, fv reflect.Value, isMethod bool) (inNum int, reqt reflect.Type, err error) {
 	if funcName == "" {
 		err = fmt.Errorf("funcName cannot be empty")
 		return
@@ -112,15 +139,17 @@ func validateFunc(funcName string, fv reflect.Value, isMethod bool) (inNum, outN
 		return
 	}
 
+	inNum = ft.NumIn()
+	outNum := ft.NumOut()
+
 	dt := 0
 	if isMethod {
 		dt = 1
 	}
-	inNum = ft.NumIn()
+
 	if inNum == 2+dt {
-		argt := ft.In(dt)
-		if argt.Kind() != reflect.String {
-			err = fmt.Errorf("unexpected type for the first argument of the function [%s]: [%s]. Expected string", funcName, argt)
+		if ft.In(dt).Kind() != reflect.String {
+			err = fmt.Errorf("unexpected type for the first argument of the function [%s]: [%s]. Expected string", funcName, ft.In(dt))
 			return
 		}
 	} else if inNum > 2+dt {
@@ -128,11 +157,9 @@ func validateFunc(funcName string, fv reflect.Value, isMethod bool) (inNum, outN
 		return
 	}
 
-	outNum = ft.NumOut()
 	if outNum == 2 {
-		argt := ft.Out(1)
-		if !isErrorType(argt) {
-			err = fmt.Errorf("unexpected type for the second return value of the function [%s]: [%s]. Expected [%s]", funcName, argt, errt)
+		if !isErrorType(ft.Out(1)) {
+			err = fmt.Errorf("unexpected type for the second return value of the function [%s]: [%s]. Expected [%s]", funcName, ft.Out(1), errt)
 			return
 		}
 	} else if outNum > 2 {
@@ -141,7 +168,8 @@ func validateFunc(funcName string, fv reflect.Value, isMethod bool) (inNum, outN
 	}
 
 	if inNum > dt {
-		if err = registerType("request", funcName, ft.In(inNum-1)); err != nil {
+		reqt = ft.In(inNum - 1)
+		if err = registerType("request", funcName, reqt); err != nil {
 			return
 		}
 	}
@@ -261,12 +289,12 @@ func init() {
 	RegisterType(&dispatcherResponse{})
 }
 
-// HandlerFunc returns HandlerFunc serving all the functions and/or services
+// NewHandlerFunc returns HandlerFunc serving all the functions and/or services
 // registered via AddFunc() and AddService().
 //
 // The returned HandlerFunc must be assigned to Server.Handler or
 // passed to New*Server().
-func (d *Dispatcher) HandlerFunc() HandlerFunc {
+func (d *Dispatcher) NewHandlerFunc() HandlerFunc {
 	if len(d.serviceMap) == 0 {
 		logPanic("gorpc.Dispatcher: register at least one service before calling HandlerFunc()")
 	}
@@ -290,7 +318,7 @@ func copyServiceMap(sm map[string]*serviceData) map[string]*serviceData {
 			funcMap[fk] = fv
 		}
 		serviceMap[sk] = &serviceData{
-			service: sv.service,
+			sv:      sv.sv,
 			funcMap: funcMap,
 		}
 	}
@@ -316,35 +344,37 @@ func dispatchRequest(serviceMap map[string]*serviceData, clientAddr string, req 
 	fd, ok := s.funcMap[funcName]
 	if !ok {
 		return &dispatcherResponse{
-			Error: fmt.Sprintf("gorpc.Dispatcher: unknown method call [%s] for the service [%s]", funcName, serviceName),
+			Error: fmt.Sprintf("gorpc.Dispatcher: unknown method [%s]", req.Name),
 		}
 	}
 
 	var inArgs []reflect.Value
-	reqv := reflect.ValueOf(req.Request)
-	if serviceName != "" {
-		if fd.inNum == 3 {
-			inArgs = []reflect.Value{s.service, reflect.ValueOf(clientAddr), reqv}
-		} else if fd.inNum == 2 {
-			inArgs = []reflect.Value{s.service, reqv}
-		} else {
-			inArgs = []reflect.Value{s.service}
+	if fd.inNum > 0 {
+		inArgs = make([]reflect.Value, fd.inNum)
+
+		dt := 0
+		if serviceName != "" {
+			dt = 1
+			inArgs[0] = s.sv
 		}
-	} else {
-		if fd.inNum == 2 {
-			inArgs = []reflect.Value{reflect.ValueOf(clientAddr), reqv}
-		} else if fd.inNum == 1 {
-			inArgs = []reflect.Value{reqv}
+		if fd.inNum == 2+dt {
+			inArgs[dt] = reflect.ValueOf(clientAddr)
+		}
+		if fd.inNum > dt {
+			reqv := reflect.ValueOf(req.Request)
+			reqt := reflect.TypeOf(req.Request)
+			if reqt != fd.reqt {
+				return &dispatcherResponse{
+					Error: fmt.Sprintf("gorpc.Dispatcher: unexpected request type for method [%s]: %s. Expected %s", req.Name, reqt, fd.reqt),
+				}
+			}
+			inArgs[len(inArgs)-1] = reqv
 		}
 	}
 
 	outArgs := fd.fv.Call(inArgs)
 
 	resp := &dispatcherResponse{}
-
-	if len(outArgs) > 2 {
-		logPanic("gorpc.Dispatcher: unexpected number of out arguments when calling [%s]: %d. Should be lower than 3", req.Name, len(outArgs))
-	}
 
 	if len(outArgs) == 1 {
 		if isErrorType(outArgs[0].Type()) {
@@ -390,8 +420,8 @@ func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
 	}
 }
 
-// NewServiceClient returns a client suitable for calling service methods
-// registered via AddService().
+// NewServiceClient returns a client suitable for calling methods
+// of the service with name serviceName registered via AddService().
 //
 // It is safe creating multiple service clients over a single underlying client.
 func (d *Dispatcher) NewServiceClient(serviceName string, c *Client) *DispatcherClient {
@@ -416,7 +446,7 @@ func (dc *DispatcherClient) CallTimeout(funcName string, request interface{}, ti
 	return getResponse(respv)
 }
 
-// Sends sends the given request to the given function and doesn't
+// Send sends the given request to the given function and doesn't
 // wait for response.
 func (dc *DispatcherClient) Send(funcName string, request interface{}) {
 	req := dc.getRequest(funcName, request)
@@ -463,10 +493,16 @@ func (dc *DispatcherClient) getRequest(funcName string, request interface{}) *di
 func getResponse(respv interface{}) (interface{}, error) {
 	resp, ok := respv.(*dispatcherResponse)
 	if !ok {
-		return nil, fmt.Errorf("gorpc.DispatcherClient: unexpected response type: %T. Expected *dispatcherResponse", respv)
+		return nil, &ClientError{
+			Server: true,
+			err:    fmt.Errorf("gorpc.DispatcherClient: unexpected response type: %T. Expected *dispatcherResponse", respv),
+		}
 	}
 	if resp.Error != "" {
-		return nil, fmt.Errorf("%s", resp.Error)
+		return nil, &ClientError{
+			Server: true,
+			err:    errors.New(resp.Error),
+		}
 	}
 	return resp.Response, nil
 }
