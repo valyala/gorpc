@@ -2,7 +2,7 @@ package gorpc
 
 import (
 	"io"
-	"sync/atomic"
+	"sync"
 )
 
 // ConnStats provides connection statistics. Applied to both gorpc.Client
@@ -40,56 +40,51 @@ type ConnStats struct {
 
 	// The number of Accept() errors.
 	AcceptErrors uint64
+
+	// lock is for 386 builds. See https://github.com/valyala/gorpc/issues/5 .
+	lock sync.Mutex
 }
 
 type writerCounter struct {
-	w            io.Writer
-	bytesWritten *uint64
-	writeCalls   *uint64
-	writeErrors  *uint64
+	w  io.Writer
+	cs *ConnStats
 }
 
 type readerCounter struct {
-	r          io.Reader
-	bytesRead  *uint64
-	readCalls  *uint64
-	readErrors *uint64
+	r  io.Reader
+	cs *ConnStats
 }
 
-func newWriterCounter(w io.Writer, s *ConnStats) io.Writer {
+func newWriterCounter(w io.Writer, cs *ConnStats) io.Writer {
 	return &writerCounter{
-		w:            w,
-		bytesWritten: &s.BytesWritten,
-		writeCalls:   &s.WriteCalls,
-		writeErrors:  &s.WriteErrors,
+		w:  w,
+		cs: cs,
 	}
 }
 
-func newReaderCounter(r io.Reader, s *ConnStats) io.Reader {
+func newReaderCounter(r io.Reader, cs *ConnStats) io.Reader {
 	return &readerCounter{
-		r:          r,
-		bytesRead:  &s.BytesRead,
-		readCalls:  &s.ReadCalls,
-		readErrors: &s.ReadErrors,
+		r:  r,
+		cs: cs,
 	}
 }
 
 func (w *writerCounter) Write(p []byte) (int, error) {
 	n, err := w.w.Write(p)
-	atomic.AddUint64(w.writeCalls, 1)
+	w.cs.incWriteCalls()
 	if err != nil {
-		atomic.AddUint64(w.writeErrors, 1)
+		w.cs.incWriteErrors()
 	}
-	atomic.AddUint64(w.bytesWritten, uint64(n))
+	w.cs.addBytesWritten(uint64(n))
 	return n, err
 }
 
 func (r *readerCounter) Read(p []byte) (int, error) {
 	n, err := r.r.Read(p)
-	atomic.AddUint64(r.readCalls, 1)
+	r.cs.incReadCalls()
 	if err != nil {
-		atomic.AddUint64(r.readErrors, 1)
+		r.cs.incReadErrors()
 	}
-	atomic.AddUint64(r.bytesRead, uint64(n))
+	r.cs.addBytesRead(uint64(n))
 	return n, err
 }

@@ -5,7 +5,6 @@ import (
 	"io"
 	"runtime"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -175,11 +174,11 @@ func serverHandler(s *Server, workersCh chan struct{}) {
 			s.Listener.Close()
 			return
 		case <-acceptChan:
-			atomic.AddUint64(&s.Stats.AcceptCalls, 1)
+			s.Stats.incAcceptCalls()
 		}
 
 		if err != nil {
-			atomic.AddUint64(&s.Stats.AcceptErrors, 1)
+			s.Stats.incAcceptErrors()
 			continue
 		}
 
@@ -380,6 +379,6 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 		}
 		wr.Response = nil
 		wr.Error = ""
-		atomic.AddUint64(&s.Stats.RPCCalls, 1)
+		s.Stats.incRPCCalls()
 	}
 }
