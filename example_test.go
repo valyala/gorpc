@@ -7,6 +7,66 @@ import (
 	"strings"
 )
 
+func ExampleServer() {
+	// Register the given struct for passing as rpc request and/or response.
+	// All structs intended for passing between client and server
+	// must be registered via RegisterType().
+	//
+	// The struct may contain arbitrary fields, but only public (exported)
+	// fields are passed between client and server.
+	type ExampleStruct struct {
+		Foo int
+
+		// This feild won't be passed over the wire,
+		// since it is private (unexported)
+		bar string
+
+		Baz string
+	}
+	RegisterType(&ExampleStruct{})
+
+	// Start echo server
+	handlerFunc := func(clientAddr string, request interface{}) interface{} {
+		return request
+	}
+	s := NewTCPServer(":43216", handlerFunc)
+	if err := s.Start(); err != nil {
+		log.Fatalf("Cannot start server: [%s]", err)
+	}
+	defer s.Stop()
+
+	// Connect client to the echo server
+	c := NewTCPClient(":43216")
+	c.Start()
+	defer c.Stop()
+
+	// Echo string
+	res, err := c.Call("foobar")
+	fmt.Printf("%+v, %+v\n", res, err)
+
+	// Echo int
+	res, err = c.Call(1234)
+	fmt.Printf("%+v, %+v\n", res, err)
+
+	// Echo string slice
+	res, err = c.Call([]string{"foo", "bar"})
+	fmt.Printf("%+v, %+v\n", res, err)
+
+	// Echo struct
+	res, err = c.Call(&ExampleStruct{
+		Foo: 123,
+		bar: "324",
+		Baz: "mmm",
+	})
+	fmt.Printf("%+v, %+v\n", res, err)
+
+	// Output:
+	// foobar, <nil>
+	// 1234, <nil>
+	// [foo bar], <nil>
+	// &{Foo:123 bar: Baz:mmm}, <nil>
+}
+
 func ExampleDispatcher_func() {
 	d := NewDispatcher()
 
@@ -77,11 +137,8 @@ func ExampleDispatcher_func() {
 	// Create a client wrapper for calling server functions.
 	dc := d.NewFuncClient(c)
 
-	// Call functions above
-	var err error
-	var res interface{}
-
-	res, err = dc.Call("Inc", nil)
+	// Call functions defined above
+	res, err := dc.Call("Inc", nil)
 	fmt.Printf("Inc=%+v, %+v, %d\n", res, err, incCalls)
 
 	res, err = dc.Call("Func42", nil)
