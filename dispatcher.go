@@ -1,6 +1,7 @@
 package gorpc
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -469,7 +470,7 @@ func getResponse(respv interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("gorpc.DispatcherClient: unexpected response type: %T. Expected *dispatcherResponse", respv)
 	}
 	if resp.Error != "" {
-		return nil, fmt.Errorf("%s", resp.Error)
+		return nil, errors.New(resp.Error)
 	}
 	return resp.Response, nil
 }
