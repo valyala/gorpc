@@ -277,6 +277,7 @@ func ExampleDispatcher_funcCalls() {
 
 	res, err = dc.Call("Error42", 42)
 	fmt.Printf("Error42(42)=%+v, %+v\n", res, err)
+
 	// Output:
 	// Inc=<nil>, <nil>, 1
 	// Func42=42, <nil>
