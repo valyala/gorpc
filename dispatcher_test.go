@@ -179,6 +179,40 @@ func TestDispatcherReturnStructResNoExportedFields(t *testing.T) {
 	})
 }
 
+func TestDispatcherMultipleFuncs(t *testing.T) {
+	d := NewDispatcher()
+
+	d.AddFunc("foo", func(a int) int { return a })
+	d.AddFunc("bar", func(b string) string { return b })
+
+	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
+		reqa := 4327
+		res, err := dc.Call("foo", reqa)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		resa, ok := res.(int)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected int", res)
+		}
+		if resa != reqa {
+			t.Fatalf("Unexpected response: %d. Expected %d", resa, reqa)
+		}
+
+		reqb := "aaa"
+		if res, err = dc.Call("bar", reqb); err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		resb, ok := res.(string)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected string", res)
+		}
+		if resb != reqb {
+			t.Fatalf("Unexpected response: [%s]. Expected [%s]", resb, reqb)
+		}
+	})
+}
+
 func TestDispatcherStructsWithIdenticalFields(t *testing.T) {
 	type Struct1 struct {
 		A int
@@ -720,6 +754,29 @@ func TestDispatcherServicePassByValue(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
 		d.AddService("aaa", testService{})
+	})
+}
+
+func TestDispatcherServiceWithoutName(t *testing.T) {
+	service := &testService{}
+
+	d := NewDispatcher()
+	testPanic(t, func() {
+		d.AddService("", service)
+	})
+}
+
+type testServiceWithoutMethods struct{}
+
+func (s *testServiceWithoutMethods) privateMethod1() {}
+func (s *testServiceWithoutMethods) privateMethod2() {}
+
+func TestDispatcherServiceWithoutPublicMethods(t *testing.T) {
+	service := &testServiceWithoutMethods{}
+
+	d := NewDispatcher()
+	testPanic(t, func() {
+		d.AddService("foobar", service)
 	})
 }
 
