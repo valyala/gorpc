@@ -138,6 +138,9 @@ func (c *Client) Start() {
 
 // Stop stops rpc client. Stopped client can be started again.
 func (c *Client) Stop() {
+	if c.clientStopChan == nil {
+		panic("gorpc.Client: the client must be started before stopping it")
+	}
 	close(c.clientStopChan)
 	c.stopWg.Wait()
 	c.clientStopChan = nil

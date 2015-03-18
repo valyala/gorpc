@@ -138,6 +138,9 @@ func (s *Server) Start() error {
 
 // Stop stops rpc server. Stopped server can be started again.
 func (s *Server) Stop() {
+	if s.serverStopChan == nil {
+		panic("gorpc.Server: server must be started before stopping it")
+	}
 	close(s.serverStopChan)
 	s.stopWg.Wait()
 	s.serverStopChan = nil
