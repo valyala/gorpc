@@ -493,10 +493,16 @@ func (dc *DispatcherClient) getRequest(funcName string, request interface{}) *di
 func getResponse(respv interface{}) (interface{}, error) {
 	resp, ok := respv.(*dispatcherResponse)
 	if !ok {
-		return nil, fmt.Errorf("gorpc.DispatcherClient: unexpected response type: %T. Expected *dispatcherResponse", respv)
+		return nil, &ClientError{
+			Server: true,
+			err:    fmt.Errorf("gorpc.DispatcherClient: unexpected response type: %T. Expected *dispatcherResponse", respv),
+		}
 	}
 	if resp.Error != "" {
-		return nil, errors.New(resp.Error)
+		return nil, &ClientError{
+			Server: true,
+			err:    errors.New(resp.Error),
+		}
 	}
 	return resp.Response, nil
 }
