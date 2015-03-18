@@ -14,6 +14,9 @@ import (
 //
 // There is no need in registering base Go types such as int, string, bool,
 // float64, etc. or arrays, slices and maps containing base Go types.
+//
+// There is no need in registering argument and return value types
+// for functions and methods registered via Dispatcher.
 func RegisterType(x interface{}) {
 	gob.Register(x)
 }
