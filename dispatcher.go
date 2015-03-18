@@ -10,6 +10,8 @@ import (
 
 // Dispatcher helps constructing HandlerFunc for dispatching across multiple
 // functions and/or services.
+//
+// See examples for details.
 type Dispatcher struct {
 	serviceMap map[string]*serviceData
 }
@@ -33,6 +35,21 @@ func NewDispatcher() *Dispatcher {
 }
 
 // AddFunc registers the given function f under the name funcName.
+//
+// The function must accept zero, one or two input arguments.
+// If the function has two arguments, then the first argument must have
+// string type - the server will pass client address in this parameter.
+//
+// The function must return zero, one or two values.
+//   * If the function has two return values, then the second value must have
+//     error type - the server will propagate this error to the client.
+//
+//   * If the function returns only error value, then the server treats it
+//     as error, not return value, when sending to the client.
+//
+// Arbitrary number of functions can be registered in the dispatcher.
+//
+// Se examples for details.
 func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
 	sd, ok := d.serviceMap[""]
 	if !ok {
@@ -57,6 +74,11 @@ func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
 }
 
 // AddService registers the given service under the name serviceName.
+//
+// Only public methods are registered, so the service must have at least
+// one public method.
+//
+// All public methods must conform requirements described in AddFunc().
 func (d *Dispatcher) AddService(serviceName string, service interface{}) {
 	if serviceName == "" {
 		logPanic("gorpc.Dispatcher: serviceName cannot be empty")
@@ -394,8 +416,8 @@ func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
 	}
 }
 
-// NewServiceClient returns a client suitable for calling service methods
-// registered via AddService().
+// NewServiceClient returns a client suitable for calling methods
+// of the service with name serviceName registered via AddService().
 //
 // It is safe creating multiple service clients over a single underlying client.
 func (d *Dispatcher) NewServiceClient(serviceName string, c *Client) *DispatcherClient {
