@@ -139,6 +139,33 @@ func ExampleDispatcher_serviceCalls() {
 	// privateFunc=<nil>, gorpc.Dispatcher: unknown method [MyService.privateFunc], 42
 }
 
+func ExampleDispatcher_AddFunc() {
+	d := NewDispatcher()
+
+	// Function without arguments and return values
+	d.AddFunc("NoArgsNoRets", func() {})
+
+	// Function with one argument and no return values
+	d.AddFunc("OneArgNoRets", func(request string) {})
+
+	// Function without arguments and one return value
+	d.AddFunc("NoArgsOneRet", func() int { return 42 })
+
+	// Function with two arguments and no return values.
+	// The first argument must have string type - the server passes
+	// client address in it.
+	d.AddFunc("TwoArgsNoRets", func(clientAddr string, requests []byte) {})
+
+	// Function with one argument and two return values.
+	// The second return value must have error type.
+	d.AddFunc("OneArgTwoRets", func(request []string) ([]string, error) {
+		if len(request) == 42 {
+			return nil, errors.New("I need 42 strings!")
+		}
+		return request, nil
+	})
+}
+
 func ExampleDispatcher_funcCalls() {
 	d := NewDispatcher()
 
