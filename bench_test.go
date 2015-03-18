@@ -10,6 +10,83 @@ import (
 	"time"
 )
 
+func BenchmarkDispatcher1Worker(b *testing.B) {
+	benchmarkDispatcher(b, 1)
+}
+
+func BenchmarkDispatcher10Workers(b *testing.B) {
+	benchmarkDispatcher(b, 10)
+}
+
+func BenchmarkDispatcher100Workers(b *testing.B) {
+	benchmarkDispatcher(b, 100)
+}
+
+func BenchmarkDispatcher1000Workers(b *testing.B) {
+	benchmarkDispatcher(b, 1000)
+}
+
+func BenchmarkDispatcher10000Workers(b *testing.B) {
+	benchmarkDispatcher(b, 10000)
+}
+
+type BenchmarkDispatcherService struct {
+	n    uint64
+	lock sync.Mutex
+}
+
+func (s *BenchmarkDispatcherService) AddAtomic(x int) uint64 {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.n += uint64(x)
+	return s.n
+}
+
+func (s *BenchmarkDispatcherService) SubAtomic(y int) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.n -= uint64(y)
+}
+
+func benchmarkDispatcher(b *testing.B, workersCount int) {
+	service := &BenchmarkDispatcherService{}
+
+	d := NewDispatcher()
+	d.AddService("RealService", service)
+
+	addr := "./dispatcher-bench.sock"
+	s := NewUnixServer(addr, d.NewHandlerFunc())
+	c := NewUnixClient(addr)
+	dc := d.NewServiceClient("RealService", c)
+
+	var nLock sync.Mutex
+	var nLocal uint64
+
+	benchClientServer(b, workersCount, c, s, func(n int) {
+		if n%10 < 7 {
+			nLock.Lock()
+			nLocal += uint64(n)
+			nLock.Unlock()
+
+			if _, err := dc.Call("AddAtomic", n); err != nil {
+				b.Fatalf("Error in AddAtomic: [%s]", err)
+			}
+		} else {
+			nLock.Lock()
+			nLocal -= uint64(n)
+			nLock.Unlock()
+
+			if _, err := dc.Call("SubAtomic", n); err != nil {
+				b.Fatalf("Error in SubAtomic: [%s]", err)
+			}
+		}
+	})
+
+	if nLocal != service.n {
+		b.Fatalf("Unexpected service state=%d. Expected %d", service.n, nLocal)
+	}
+}
+
 func BenchmarkRealApp1Worker(b *testing.B) {
 	simulateRealApp(b, 1)
 }
@@ -58,7 +135,7 @@ func simulateRealApp(b *testing.B, workersCount int) {
 	}
 	RegisterType(&realMessage{})
 
-	benchClientServer(b, workersCount, c, s, func(c *Client, n int) {
+	benchClientServer(b, workersCount, c, s, func(n int) {
 		doRealWork()
 		req := &realMessage{
 			FooString: fmt.Sprintf("aaa bbb ccc %d", n),
@@ -336,10 +413,10 @@ func benchEchoStruct(b *testing.B, workers int, disableCompression, isUnixTransp
 
 func benchEchoFunc(b *testing.B, workers int, disableCompression, isUnixTransport bool, f func(*Client, int)) {
 	s, c := createEchoServerAndClient(b, disableCompression, workers, isUnixTransport)
-	benchClientServer(b, workers, c, s, f)
+	benchClientServer(b, workers, c, s, func(n int) { f(c, n) })
 }
 
-func benchClientServer(b *testing.B, workers int, c *Client, s *Server, f func(*Client, int)) {
+func benchClientServer(b *testing.B, workers int, c *Client, s *Server, f func(int)) {
 	if err := s.Start(); err != nil {
 		b.Fatalf("Cannot start gorpc server: [%s]", err)
 	}
@@ -358,7 +435,7 @@ func benchClientServer(b *testing.B, workers int, c *Client, s *Server, f func(*
 		go func() {
 			defer wg.Done()
 			for n := range ch {
-				f(c, n)
+				f(n)
 			}
 		}()
 	}
@@ -373,7 +450,7 @@ func benchClientServer(b *testing.B, workers int, c *Client, s *Server, f func(*
 	wg.Wait()
 }
 
-func createEchoServerAndClient(b *testing.B, disableCompression bool, pendingMessages int, isUnixTransport bool) (s *Server, c *Client) {
+func createEchoServerAndClient(b *testing.B, disableCompression bool, workers int, isUnixTransport bool) (s *Server, c *Client) {
 	if isUnixTransport {
 		addr := "./gorpc-bench.sock"
 		s = NewUnixServer(addr, echoHandler)
@@ -390,8 +467,11 @@ func createEchoServerAndClient(b *testing.B, disableCompression bool, pendingMes
 		c.DisableCompression = disableCompression
 	}
 
+	s.Concurrency = workers
+	s.PendingResponses = workers
+
 	c.Conns = runtime.GOMAXPROCS(-1)
-	c.PendingRequests = pendingMessages
+	c.PendingRequests = workers
 
 	return s, c
 }
