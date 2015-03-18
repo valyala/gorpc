@@ -23,7 +23,11 @@ packets and the amount of network bandwidth) required for RPC processing under
 high load.
 
 
-Gorpc also provides easy to use API on the top of Dispatcher.
+Gorpc also provides easy to use API on the top of Dispatcher. The API allows
+easily converting usual functions and/or struct methods into RPC versions
+on both client and server sides.
+See [Dispatcher examples](http://godoc.org/github.com/valyala/gorpc#Dispatcher)
+for more details.
 
 
 By default TCP connections are used as underlying gorpc transport. But you can
