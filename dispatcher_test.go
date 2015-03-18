@@ -8,6 +8,31 @@ import (
 	"unsafe"
 )
 
+func TestDispatcherNewHandlerNoFuncs(t *testing.T) {
+	d := NewDispatcher()
+	testPanic(t, func() {
+		d.NewHandlerFunc()
+	})
+}
+
+func TestDispatcherNewFuncClientNoFuncs(t *testing.T) {
+	c := NewTCPClient(getRandomAddr())
+
+	d := NewDispatcher()
+	testPanic(t, func() {
+		d.NewFuncClient(c)
+	})
+}
+
+func TestDispatcherNewServiceClientNoService(t *testing.T) {
+	c := NewTCPClient(getRandomAddr())
+
+	d := NewDispatcher()
+	testPanic(t, func() {
+		d.NewServiceClient("foobar", c)
+	})
+}
+
 func TestDispatcherAddNonFunc(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
@@ -783,18 +808,25 @@ func TestDispatcherServiceWithoutPublicMethods(t *testing.T) {
 func TestDispatcherServiceUnknownService(t *testing.T) {
 	service := &testService{}
 
-	d := NewDispatcher()
-	d.AddService("foobar", service)
+	sd := NewDispatcher()
+	sd.AddService("foobar", service)
 
-	testDispatcherService(t, d, "barbaz", func(dc *DispatcherClient) {
-		res, err := dc.Call("Inc", nil)
-		if err == nil {
-			t.Fatalf("Error expected")
-		}
-		if res != nil {
-			t.Fatalf("Unexpected response: [%+v]. Expected nil", res)
-		}
-	})
+	cd := NewDispatcher()
+	cd.AddService("barbaz", service)
+
+	c, s := getClientServer(t, sd)
+	defer s.Stop()
+	defer c.Stop()
+
+	dc := cd.NewServiceClient("barbaz", c)
+
+	res, err := dc.Call("Inc", nil)
+	if err == nil {
+		t.Fatalf("Error expected")
+	}
+	if res != nil {
+		t.Fatalf("Unexpected response: [%+v]. Expected nil", res)
+	}
 }
 
 func TestDispatcherServiceUnknownMethodCall(t *testing.T) {
