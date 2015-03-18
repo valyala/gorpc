@@ -14,14 +14,14 @@ type Dispatcher struct {
 }
 
 type serviceData struct {
-	service reflect.Value
+	sv      reflect.Value
 	funcMap map[string]*funcData
 }
 
 type funcData struct {
-	inNum  int
-	outNum int
-	fv     reflect.Value
+	inNum int
+	reqt  reflect.Type
+	fv    reflect.Value
 }
 
 // NewDispatcher returns new dispatcher.
@@ -49,7 +49,7 @@ func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
 		fv: reflect.Indirect(reflect.ValueOf(f)),
 	}
 	var err error
-	if fd.inNum, fd.outNum, err = validateFunc(funcName, fd.fv, false); err != nil {
+	if fd.inNum, fd.reqt, err = validateFunc(funcName, fd.fv, false); err != nil {
 		logPanic("gorpc.Disaptcher: %s", err)
 	}
 	sd.funcMap[funcName] = fd
@@ -84,7 +84,7 @@ func (d *Dispatcher) AddService(serviceName string, service interface{}) {
 			fv: mv.Func,
 		}
 		var err error
-		if fd.inNum, fd.outNum, err = validateFunc(funcName, fd.fv, true); err != nil {
+		if fd.inNum, fd.reqt, err = validateFunc(funcName, fd.fv, true); err != nil {
 			logPanic("gorpc.Dispatcher: %s", err)
 		}
 		funcMap[mv.Name] = fd
@@ -95,12 +95,12 @@ func (d *Dispatcher) AddService(serviceName string, service interface{}) {
 	}
 
 	d.serviceMap[serviceName] = &serviceData{
-		service: reflect.ValueOf(service),
+		sv:      reflect.ValueOf(service),
 		funcMap: funcMap,
 	}
 }
 
-func validateFunc(funcName string, fv reflect.Value, isMethod bool) (inNum, outNum int, err error) {
+func validateFunc(funcName string, fv reflect.Value, isMethod bool) (inNum int, reqt reflect.Type, err error) {
 	if funcName == "" {
 		err = fmt.Errorf("funcName cannot be empty")
 		return
@@ -112,15 +112,17 @@ func validateFunc(funcName string, fv reflect.Value, isMethod bool) (inNum, outN
 		return
 	}
 
+	inNum = ft.NumIn()
+	outNum := ft.NumOut()
+
 	dt := 0
 	if isMethod {
 		dt = 1
 	}
-	inNum = ft.NumIn()
+
 	if inNum == 2+dt {
-		argt := ft.In(dt)
-		if argt.Kind() != reflect.String {
-			err = fmt.Errorf("unexpected type for the first argument of the function [%s]: [%s]. Expected string", funcName, argt)
+		if ft.In(dt).Kind() != reflect.String {
+			err = fmt.Errorf("unexpected type for the first argument of the function [%s]: [%s]. Expected string", funcName, ft.In(dt))
 			return
 		}
 	} else if inNum > 2+dt {
@@ -128,11 +130,9 @@ func validateFunc(funcName string, fv reflect.Value, isMethod bool) (inNum, outN
 		return
 	}
 
-	outNum = ft.NumOut()
 	if outNum == 2 {
-		argt := ft.Out(1)
-		if !isErrorType(argt) {
-			err = fmt.Errorf("unexpected type for the second return value of the function [%s]: [%s]. Expected [%s]", funcName, argt, errt)
+		if !isErrorType(ft.Out(1)) {
+			err = fmt.Errorf("unexpected type for the second return value of the function [%s]: [%s]. Expected [%s]", funcName, ft.Out(1), errt)
 			return
 		}
 	} else if outNum > 2 {
@@ -141,7 +141,8 @@ func validateFunc(funcName string, fv reflect.Value, isMethod bool) (inNum, outN
 	}
 
 	if inNum > dt {
-		if err = registerType("request", funcName, ft.In(inNum-1)); err != nil {
+		reqt = ft.In(inNum - 1)
+		if err = registerType("request", funcName, reqt); err != nil {
 			return
 		}
 	}
@@ -290,7 +291,7 @@ func copyServiceMap(sm map[string]*serviceData) map[string]*serviceData {
 			funcMap[fk] = fv
 		}
 		serviceMap[sk] = &serviceData{
-			service: sv.service,
+			sv:      sv.sv,
 			funcMap: funcMap,
 		}
 	}
@@ -316,35 +317,37 @@ func dispatchRequest(serviceMap map[string]*serviceData, clientAddr string, req 
 	fd, ok := s.funcMap[funcName]
 	if !ok {
 		return &dispatcherResponse{
-			Error: fmt.Sprintf("gorpc.Dispatcher: unknown method call [%s] for the service [%s]", funcName, serviceName),
+			Error: fmt.Sprintf("gorpc.Dispatcher: unknown method [%s]", req.Name),
 		}
 	}
 
 	var inArgs []reflect.Value
-	reqv := reflect.ValueOf(req.Request)
-	if serviceName != "" {
-		if fd.inNum == 3 {
-			inArgs = []reflect.Value{s.service, reflect.ValueOf(clientAddr), reqv}
-		} else if fd.inNum == 2 {
-			inArgs = []reflect.Value{s.service, reqv}
-		} else {
-			inArgs = []reflect.Value{s.service}
+	if fd.inNum > 0 {
+		inArgs = make([]reflect.Value, fd.inNum)
+
+		dt := 0
+		if serviceName != "" {
+			dt = 1
+			inArgs[0] = s.sv
 		}
-	} else {
-		if fd.inNum == 2 {
-			inArgs = []reflect.Value{reflect.ValueOf(clientAddr), reqv}
-		} else if fd.inNum == 1 {
-			inArgs = []reflect.Value{reqv}
+		if fd.inNum == 2+dt {
+			inArgs[dt] = reflect.ValueOf(clientAddr)
+		}
+		if fd.inNum > dt {
+			reqv := reflect.ValueOf(req.Request)
+			reqt := reflect.TypeOf(req.Request)
+			if reqt != fd.reqt {
+				return &dispatcherResponse{
+					Error: fmt.Sprintf("gorpc.Dispatcher: unexpected request type for method [%s]: %s. Expected %s", req.Name, reqt, fd.reqt),
+				}
+			}
+			inArgs[len(inArgs)-1] = reqv
 		}
 	}
 
 	outArgs := fd.fv.Call(inArgs)
 
 	resp := &dispatcherResponse{}
-
-	if len(outArgs) > 2 {
-		logPanic("gorpc.Dispatcher: unexpected number of out arguments when calling [%s]: %d. Should be lower than 3", req.Name, len(outArgs))
-	}
 
 	if len(outArgs) == 1 {
 		if isErrorType(outArgs[0].Type()) {
