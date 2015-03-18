@@ -992,7 +992,7 @@ func testDispatcherFunc(t *testing.T, d *Dispatcher, f func(dc *DispatcherClient
 
 func getClientServer(t *testing.T, d *Dispatcher) (c *Client, s *Server) {
 	addr := getRandomAddr()
-	s = NewTCPServer(addr, d.HandlerFunc())
+	s = NewTCPServer(addr, d.NewHandlerFunc())
 	if err := s.Start(); err != nil {
 		t.Fatalf("Error when starting server: [%s]", err)
 	}

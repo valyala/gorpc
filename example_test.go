@@ -123,7 +123,7 @@ func ExampleDispatcher_func() {
 	})
 
 	// Start the server serving all the registered functions above
-	s := NewTCPServer(":12345", d.HandlerFunc())
+	s := NewTCPServer(":12345", d.NewHandlerFunc())
 	if err := s.Start(); err != nil {
 		log.Fatalf("Cannot start rpc server: [%s]", err)
 	}

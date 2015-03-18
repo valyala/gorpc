@@ -263,12 +263,12 @@ func init() {
 	RegisterType(&dispatcherResponse{})
 }
 
-// HandlerFunc returns HandlerFunc serving all the functions and/or services
+// NewHandlerFunc returns HandlerFunc serving all the functions and/or services
 // registered via AddFunc() and AddService().
 //
 // The returned HandlerFunc must be assigned to Server.Handler or
 // passed to New*Server().
-func (d *Dispatcher) HandlerFunc() HandlerFunc {
+func (d *Dispatcher) NewHandlerFunc() HandlerFunc {
 	if len(d.serviceMap) == 0 {
 		logPanic("gorpc.Dispatcher: register at least one service before calling HandlerFunc()")
 	}
