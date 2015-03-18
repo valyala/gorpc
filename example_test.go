@@ -169,7 +169,7 @@ func ExampleDispatcher_AddFunc() {
 	// The second return value must have error type.
 	d.AddFunc("OneArgTwoRets", func(request []string) ([]string, error) {
 		if len(request) == 42 {
-			return nil, errors.New("I need 42 strings!")
+			return nil, errors.New("need 42 strings!")
 		}
 		return request, nil
 	})
@@ -225,7 +225,7 @@ func ExampleDispatcher_funcCalls() {
 	d.AddFunc("ClientAddr", func(clientAddr string, x int) (int, error) {
 		clientHost := strings.SplitN(clientAddr, ":", 2)[0]
 		if clientHost != "allowed.client.host" {
-			return 0, fmt.Errorf("Invalid rpc client host: [%s]", clientHost)
+			return 0, fmt.Errorf("invalid rpc client host: [%s]", clientHost)
 		}
 		return x, nil
 	})

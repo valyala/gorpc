@@ -446,7 +446,7 @@ func (dc *DispatcherClient) CallTimeout(funcName string, request interface{}, ti
 	return getResponse(respv)
 }
 
-// Sends sends the given request to the given function and doesn't
+// Send sends the given request to the given function and doesn't
 // wait for response.
 func (dc *DispatcherClient) Send(funcName string, request interface{}) {
 	req := dc.getRequest(funcName, request)
