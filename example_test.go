@@ -87,6 +87,15 @@ func (s *ExampleDispatcherService) privateFunc(string) { s.state = 0 }
 func ExampleDispatcher_serviceCalls() {
 	d := NewDispatcher()
 
+	// ExampleDispatcherService has the following functions:
+	//
+	//   * Get() int { return state }
+	//   * Set(x int) { state = x }
+	//   * GetError42() (int, error) {
+	//         if state == 42 { return 0, errors.New("error42") }
+	//         return state, nil
+	//     }
+	//   * privateFunc(string) { state = 0 }
 	service := &ExampleDispatcherService{
 		state: 123,
 	}
