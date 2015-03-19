@@ -1,0 +1,2 @@
+- Add support for channel request and response.
+- Add support for io.Writer, io.Reader and io.ReadWriter request and response.
