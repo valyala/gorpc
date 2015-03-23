@@ -589,7 +589,7 @@ func TestMixedCallSend(t *testing.T) {
 	defer c.Stop()
 
 	for i := 0; i < 2; i++ {
-		for i := 0; i < 100; i++ {
+		for i := 0; i < 1000; i++ {
 			c.Send("123211")
 		}
 		testIntClient(t, c)

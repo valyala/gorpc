@@ -300,13 +300,23 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 func serveRequest(handler HandlerFunc, serverAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, m *serverMessage, workersCh <-chan struct{}) {
 	request := m.Request
 	m.Request = nil
-	m.Response, m.Error = callHandlerWithRecover(handler, m.ClientAddr, serverAddr, request)
+	clientAddr := m.ClientAddr
+	m.ClientAddr = ""
+	skipResponse := m.SkipResponse
+	m.SkipResponse = false
 
-	if m.SkipResponse {
+	if skipResponse {
 		m.Response = nil
 		m.Error = ""
 		serverMessagePool.Put(m)
-	} else {
+	}
+
+	response, err := callHandlerWithRecover(handler, clientAddr, serverAddr, request)
+
+	if !skipResponse {
+		m.Response = response
+		m.Error = err
+
 		// Select hack for better performance.
 		// See https://github.com/valyala/gorpc/pull/1 for details.
 		select {
