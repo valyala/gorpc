@@ -80,7 +80,7 @@ func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
 // AddService registers public methods of the given service under
 // the given name serviceName.
 //
-// While only public methods are registered, the service must have at least
+// Since only public methods are registered, the service must have at least
 // one public method.
 //
 // All public methods must conform requirements described in AddFunc().
