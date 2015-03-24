@@ -16,6 +16,8 @@ import (
 // with gorpc.RegisterType() before starting the server.
 // There is no need in registering base Go types such as int, string, bool,
 // float64, etc. or arrays, slices and maps containing base Go types.
+//
+// Hint: use Dispatcher for HandlerFunc construction.
 type HandlerFunc func(clientAddr string, request interface{}) (response interface{})
 
 // Server implements RPC server.
@@ -39,6 +41,8 @@ type Server struct {
 	//
 	// Server calls this function for each incoming request.
 	// The function must process the request and return the corresponding response.
+	//
+	// Hint: use Dispatcher for HandlerFunc construction.
 	Handler HandlerFunc
 
 	// The maximum number of concurrent rpc calls the server may perform.

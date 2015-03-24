@@ -158,6 +158,8 @@ func (c *Client) Stop() {
 // There is no need in registering base Go types such as int, string, bool,
 // float64, etc. or arrays, slices and maps containing base Go types.
 //
+// Hint: use Dispatcher for distinct calls' construction.
+//
 // Don't forget starting the client with Client.Start() before calling Client.Call().
 func (c *Client) Call(request interface{}) (response interface{}, err error) {
 	return c.CallTimeout(request, c.RequestTimeout)
@@ -174,6 +176,8 @@ func (c *Client) Call(request interface{}) (response interface{}, err error) {
 // starting the client.
 // There is no need in registering base Go types such as int, string, bool,
 // float64, etc. or arrays, slices and maps containing base Go types.
+//
+// Hint: use Dispatcher for distinct calls' construction.
 //
 // Don't forget starting the client with Client.Start() before calling Client.Call().
 func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (response interface{}, err error) {
