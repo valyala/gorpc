@@ -8,7 +8,7 @@ Gorpc provides the following features useful for highly loaded projects
 with RPC:
 
 * It minimizes the number of connect() syscalls by pipelining request
-  and response messages over a single TCP connection.
+  and response messages over a single connection.
 
 * It minimizes the number of send() syscalls by packing as much
   as possible pending requests and responses into a single compressed buffer
