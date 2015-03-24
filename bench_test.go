@@ -448,6 +448,8 @@ func benchClientServer(b *testing.B, workers int, c *Client, s *Server, f func(i
 	close(ch)
 
 	wg.Wait()
+
+	fmt.Printf("\n\tread: %d bytes/call, written: %d bytes/call\n", c.Stats.BytesRead/c.Stats.RPCCalls, c.Stats.BytesWritten/c.Stats.RPCCalls)
 }
 
 func createEchoServerAndClient(b *testing.B, disableCompression bool, workers int, isUnixTransport bool) (s *Server, c *Client) {
