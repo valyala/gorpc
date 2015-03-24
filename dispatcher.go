@@ -77,9 +77,10 @@ func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
 	sd.funcMap[funcName] = fd
 }
 
-// AddService registers the given service under the name serviceName.
+// AddService registers public methods of the given service under
+// the given name serviceName.
 //
-// Only public methods are registered, so the service must have at least
+// While only public methods are registered, the service must have at least
 // one public method.
 //
 // All public methods must conform requirements described in AddFunc().
@@ -415,6 +416,10 @@ type DispatcherClient struct {
 // NewFuncClient returns a client suitable for calling functions registered
 // via AddFunc().
 func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
+	if len(d.serviceMap) == 0 || d.serviceMap[""] == nil {
+		logPanic("gorpc.Dispatcher: register at least one function with AddFunc() before calling NewFuncClient()")
+	}
+
 	return &DispatcherClient{
 		c: c,
 	}
@@ -425,6 +430,10 @@ func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
 //
 // It is safe creating multiple service clients over a single underlying client.
 func (d *Dispatcher) NewServiceClient(serviceName string, c *Client) *DispatcherClient {
+	if len(d.serviceMap) == 0 || d.serviceMap[serviceName] == nil {
+		logPanic("gorpc.Dispatcher: service [%s] must be registered with AddService() before calling NewServiceClient()", serviceName)
+	}
+
 	return &DispatcherClient{
 		c:           c,
 		serviceName: serviceName,

@@ -138,6 +138,9 @@ func (c *Client) Start() {
 
 // Stop stops rpc client. Stopped client can be started again.
 func (c *Client) Stop() {
+	if c.clientStopChan == nil {
+		panic("gorpc.Client: the client must be started before stopping it")
+	}
 	close(c.clientStopChan)
 	c.stopWg.Wait()
 	c.clientStopChan = nil
@@ -419,6 +422,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 	t := time.NewTimer(c.FlushDelay)
 	var flushChan <-chan time.Time
 	var wr wireRequest
+	var msgID uint64
 	for {
 		var m *clientMessage
 
@@ -443,9 +447,11 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			flushChan = getFlushChan(t, c.FlushDelay)
 		}
 
-		wr.ID++
-
-		if !m.SkipResponse {
+		if m.SkipResponse {
+			wr.ID = 0
+		} else {
+			msgID++
+			wr.ID = msgID
 			pendingRequestsLock.Lock()
 			n := len(pendingRequests)
 			pendingRequests[wr.ID] = m
@@ -487,7 +493,9 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 
 		pendingRequestsLock.Lock()
 		m, ok := pendingRequests[wr.ID]
-		delete(pendingRequests, wr.ID)
+		if ok {
+			delete(pendingRequests, wr.ID)
+		}
 		pendingRequestsLock.Unlock()
 
 		if !ok {

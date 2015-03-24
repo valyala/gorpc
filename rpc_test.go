@@ -22,6 +22,40 @@ func getRandomAddr() string {
 	return fmt.Sprintf(":%d", rand.Intn(20000)+10000)
 }
 
+func TestClientDoubleStart(t *testing.T) {
+	c := NewTCPClient(getRandomAddr())
+	c.Start()
+	testPanic(t, func() {
+		c.Start()
+	})
+}
+
+func TestServerDoubleStart(t *testing.T) {
+	s := NewTCPServer(getRandomAddr(), echoHandler)
+	if err := s.Start(); err != nil {
+		t.Fatalf("unexpected error when starting server: [%s]", err)
+	}
+	testPanic(t, func() {
+		if err := s.Start(); err != nil {
+			t.Fatalf("unexpected error when starting server: [%s]", err)
+		}
+	})
+}
+
+func TestStopStoppedClient(t *testing.T) {
+	c := NewTCPClient(getRandomAddr())
+	testPanic(t, func() {
+		c.Stop()
+	})
+}
+
+func TestStopStoppedServer(t *testing.T) {
+	s := NewTCPServer(getRandomAddr(), echoHandler)
+	testPanic(t, func() {
+		s.Stop()
+	})
+}
+
 func TestServerServe(t *testing.T) {
 	s := &Server{
 		Addr:    getRandomAddr(),
@@ -555,7 +589,7 @@ func TestMixedCallSend(t *testing.T) {
 	defer c.Stop()
 
 	for i := 0; i < 2; i++ {
-		for i := 0; i < 100; i++ {
+		for i := 0; i < 1000; i++ {
 			c.Send("123211")
 		}
 		testIntClient(t, c)
