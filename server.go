@@ -70,11 +70,21 @@ type Server struct {
 	// Default is DefaultBufferSize.
 	RecvBufferSize int
 
+	// OnConnect is called whenever connection from client is accepted.
+	// The callback can be used for authentication/authorization and/or
+	// for custom transport wrapping.
+	//
+	// See also Listener, which can be used for sophisticated transport
+	// implementation.
+	OnConnect OnConnectFunc
+
 	// The server obtains new client connections via Listener.Accept().
 	//
 	// Override the listener if you want custom underlying transport
 	// and/or client authentication/authorization.
 	// Don't forget overriding Client.Dial() callback accordingly.
+	//
+	// See also OnConnect for authentication/authorization purposes.
 	//
 	// * NewTLSClient() and NewTLSServer() can be used for encrypted rpc.
 	// * NewUnixClient() and NewUnixServer() can be used for fast local
@@ -197,13 +207,23 @@ func serverHandler(s *Server, workersCh chan struct{}) {
 func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr string, workersCh chan struct{}) {
 	defer s.stopWg.Done()
 
+	if s.OnConnect != nil {
+		newConn, err := s.OnConnect(clientAddr, conn)
+		if err != nil {
+			logError("gorpc.Server: [%s]->[%s]. OnConnect error: [%s]", clientAddr, s.Addr, err)
+			conn.Close()
+			return
+		}
+		conn = newConn
+	}
+
 	var enabledCompression bool
 	var err error
 	zChan := make(chan bool, 1)
 	go func() {
 		var buf [1]byte
 		if _, err = conn.Read(buf[:]); err != nil {
-			logError("gorpc.Server: [%s]. Error when reading handshake from client: [%s]", s.Addr, err)
+			logError("gorpc.Server: [%s]->[%s]. Error when reading handshake from client: [%s]", clientAddr, s.Addr, err)
 		}
 		zChan <- (buf[0] != 0)
 	}()
@@ -217,7 +237,7 @@ func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr strin
 		conn.Close()
 		return
 	case <-time.After(10 * time.Second):
-		logError("gorpc.Server: [%s]. Cannot obtain handshake from client during 10s", s.Addr)
+		logError("gorpc.Server: [%s]->[%s]. Cannot obtain handshake from client during 10s", clientAddr, s.Addr)
 		conn.Close()
 		return
 	}

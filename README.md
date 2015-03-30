@@ -30,11 +30,11 @@ See [Dispatcher examples](http://godoc.org/github.com/valyala/gorpc#Dispatcher)
 for more details.
 
 
-By default TCP connections are used as underlying gorpc transport. But you can
-use anything you want as an underlying transport - just provide custom
+By default TCP connections are used as underlying gorpc transport.
+But it is possible using arbitrary underlying transport - just provide custom
 implementations for Client.Dial and Server.Listener.
 RPC client authentication and authorization can be easily implemented via custom
-underlying transport.
+underlying transport and/or via OnConnect callbacks.
 Currently gorpc provides TCP, TLS and unix socket transport out of the box.
 
 

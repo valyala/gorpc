@@ -67,13 +67,23 @@ type Client struct {
 	// Default value is DefaultBufferSize.
 	RecvBufferSize int
 
+	// OnConnect is called whenever connection to server is established.
+	// The callback can be used for authentication/authorization and/or
+	// for custom transport wrapping.
+	//
+	// See also Dial callback, which can be used for sophisticated
+	// transport implementation.
+	OnConnect OnConnectFunc
+
 	// The client calls this callback when it needs new connection
 	// to the server.
 	// The client passes Client.Addr into Dial().
 	//
 	// Override this callback if you want custom underlying transport
-	// and/or client authentication/authorization.
+	// and/or authentication/authorization.
 	// Don't forget overriding Server.Listener accordingly.
+	//
+	// See also OnConnect for authentication/authorization purposes.
 	//
 	// * NewTLSClient() and NewTLSServer() can be used for encrypted rpc.
 	// * NewUnixClient() and NewUnixServer() can be used for fast local
@@ -340,6 +350,16 @@ func clientHandler(c *Client) {
 }
 
 func clientHandleConnection(c *Client, conn io.ReadWriteCloser) {
+	if c.OnConnect != nil {
+		newConn, err := c.OnConnect(c.Addr, conn)
+		if err != nil {
+			logError("gorpc.Client: [%s]. OnConnect error: [%s]", c.Addr, err)
+			conn.Close()
+			return
+		}
+		conn = newConn
+	}
+
 	var buf [1]byte
 	if !c.DisableCompression {
 		buf[0] = 1
