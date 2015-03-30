@@ -71,8 +71,8 @@ type Server struct {
 	RecvBufferSize int
 
 	// OnConnect is called whenever connection from client is accepted.
-	// The callback can be used for authentication/authorization and/or
-	// for custom transport wrapping.
+	// The callback can be used for authentication/authorization/encryption
+	// and/or for custom transport wrapping.
 	//
 	// See also Listener, which can be used for sophisticated transport
 	// implementation.

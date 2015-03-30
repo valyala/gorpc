@@ -33,8 +33,8 @@ for more details.
 By default TCP connections are used as underlying gorpc transport.
 But it is possible using arbitrary underlying transport - just provide custom
 implementations for Client.Dial and Server.Listener.
-RPC client authentication and authorization can be easily implemented via custom
-underlying transport and/or via OnConnect callbacks.
+RPC authentication, authorization and encryption can be easily implemented
+via custom underlying transport and/or via OnConnect callbacks.
 Currently gorpc provides TCP, TLS and unix socket transport out of the box.
 
 

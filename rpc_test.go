@@ -405,6 +405,62 @@ func testIntClient(t *testing.T, c *Client) {
 	}
 }
 
+type onConnectRwcWrapper struct {
+	rwc io.ReadWriteCloser
+	t   *testing.T
+}
+
+func (w *onConnectRwcWrapper) Read(p []byte) (int, error) {
+	n, err := w.rwc.Read(p)
+	sillyDecrypt(p)
+	return n, err
+}
+
+func (w *onConnectRwcWrapper) Write(p []byte) (int, error) {
+	sillyEncrypt(p)
+	return w.rwc.Write(p)
+}
+
+func (w *onConnectRwcWrapper) Close() error {
+	return w.rwc.Close()
+}
+
+func sillyEncrypt(p []byte) {
+	for i := 0; i < len(p); i++ {
+		p[i] ^= 42
+	}
+}
+
+func sillyDecrypt(p []byte) {
+	sillyEncrypt(p)
+}
+
+func newOnConnectFunc(t *testing.T) OnConnectFunc {
+	return func(remoteAddr string, rwc io.ReadWriteCloser) (io.ReadWriteCloser, error) {
+		return &onConnectRwcWrapper{
+			rwc: rwc,
+			t:   t,
+		}, nil
+	}
+}
+
+func TestOnConnect(t *testing.T) {
+	addr := "./test-onconnect.sock"
+	s := NewUnixServer(addr, echoHandler)
+	s.OnConnect = newOnConnectFunc(t)
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := NewUnixClient(addr)
+	c.OnConnect = newOnConnectFunc(t)
+	c.Start()
+	defer c.Stop()
+
+	testIntClient(t, c)
+}
+
 func TestConcurrency(t *testing.T) {
 	addr := getRandomAddr()
 	s := NewTCPServer(addr, func(clientAddr string, request interface{}) interface{} {
