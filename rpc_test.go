@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -22,9 +23,93 @@ func getRandomAddr() string {
 	return fmt.Sprintf(":%d", rand.Intn(20000)+10000)
 }
 
+func TestBadClient(t *testing.T) {
+	addr := getRandomAddr()
+	s := NewTCPServer(addr, echoHandler)
+	s.Start()
+	defer s.Stop()
+
+	for i := 0; i < 10; i++ {
+		sendBadInput(t, addr, 0)
+		sendBadInput(t, addr, 1)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+}
+
+func sendBadInput(t *testing.T, addr string, isCompressed byte) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("cannot establish connection to server on addr=[%s]: [%s]", addr, err)
+	}
+
+	data := randomData(65536)
+	data[0] = isCompressed
+	conn.Write(data)
+	conn.Close()
+}
+
+func randomData(n int) []byte {
+	data := make([]byte, n)
+	for i := 0; i < n; i++ {
+		data[i] = byte(rand.Int())
+	}
+	return data
+}
+
+func TestBadServer(t *testing.T) {
+	addr := getRandomAddr()
+
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		t.Fatalf("cannot listen on [%s]: [%s]", addr, err)
+	}
+
+	doneCh := make(chan struct{})
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				close(doneCh)
+				return
+			}
+
+			go func() {
+				buf := make([]byte, 4096)
+				conn.Read(buf)
+				conn.Write(randomData(65536))
+				conn.Close()
+			}()
+		}
+	}()
+
+	// enabled compression
+	c := NewTCPClient(addr)
+	c.DisableCompression = false
+	c.Start()
+	for i := 0; i < 10; i++ {
+		c.Call("foobarbaz")
+	}
+	c.Stop()
+
+	// disabled compression
+	c = NewTCPClient(addr)
+	c.DisableCompression = true
+	c.Start()
+	for i := 0; i < 10; i++ {
+		c.Call("foobarbaz")
+	}
+	c.Stop()
+
+	ln.Close()
+	<-doneCh
+}
+
 func TestClientDoubleStart(t *testing.T) {
 	c := NewTCPClient(getRandomAddr())
 	c.Start()
+	defer c.Stop()
+
 	testPanic(t, func() {
 		c.Start()
 	})
@@ -35,6 +120,8 @@ func TestServerDoubleStart(t *testing.T) {
 	if err := s.Start(); err != nil {
 		t.Fatalf("unexpected error when starting server: [%s]", err)
 	}
+	defer s.Stop()
+
 	testPanic(t, func() {
 		if err := s.Start(); err != nil {
 			t.Fatalf("unexpected error when starting server: [%s]", err)

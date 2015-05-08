@@ -458,7 +458,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 				return
 			case m = <-c.requestsChan:
 			case <-flushChan:
-				if err := e.Flush(); err != nil {
+				if err = e.Flush(); err != nil {
 					err = fmt.Errorf("gorpc.Client: [%s]. Cannot flush requests to underlying stream: [%s]", c.Addr, err)
 					return
 				}
@@ -493,7 +493,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 		if m.SkipResponse {
 			clientMessagePool.Put(m)
 		}
-		if err := e.Encode(wr); err != nil {
+		if err = e.Encode(wr); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
 			return
 		}
@@ -503,14 +503,21 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 
 func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMessage, pendingRequestsLock *sync.Mutex, done chan<- error) {
 	var err error
-	defer func() { done <- err }()
+	defer func() {
+		if r := recover(); r != nil {
+			if err == nil {
+				err = fmt.Errorf("gorpc.Client: [%s]. Panic when reading data from server: %v", c.Addr, r)
+			}
+		}
+		done <- err
+	}()
 
 	d := newMessageDecoder(r, c.RecvBufferSize, !c.DisableCompression, &c.Stats)
 	defer d.Close()
 
 	var wr wireResponse
 	for {
-		if err := d.Decode(&wr); err != nil {
+		if err = d.Decode(&wr); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot decode response: [%s]", c.Addr, err)
 			return
 		}

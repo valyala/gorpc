@@ -139,7 +139,7 @@ func (s *Server) Start() error {
 		s.Listener = &defaultListener{}
 	}
 	if err := s.Listener.Init(s.Addr); err != nil {
-		err := fmt.Errorf("gorpc.Server: [%s]. Cannot listen to: [%s]", s.Addr, err)
+		err = fmt.Errorf("gorpc.Server: [%s]. Cannot listen to: [%s]", s.Addr, err)
 		logError("%s", err)
 		return err
 	}
@@ -286,7 +286,12 @@ var serverMessagePool = &sync.Pool{
 func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<- *serverMessage,
 	stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool, workersCh chan struct{}) {
 
-	defer func() { close(done) }()
+	defer func() {
+		if r := recover(); r != nil {
+			logError("gorpc.Server: [%s]->[%s]. Panic when reading data from client: %v", clientAddr, s.Addr, r)
+		}
+		close(done)
+	}()
 
 	d := newMessageDecoder(r, s.RecvBufferSize, enabledCompression, &s.Stats)
 	defer d.Close()
