@@ -457,21 +457,19 @@ func (dc *DispatcherClient) CallTimeout(funcName string, request interface{}, ti
 
 // Send sends the given request to the given function and doesn't
 // wait for response.
-func (dc *DispatcherClient) Send(funcName string, request interface{}) {
+func (dc *DispatcherClient) Send(funcName string, request interface{}) error {
 	req := dc.getRequest(funcName, request)
-	dc.c.Send(req)
+	return dc.c.Send(req)
 }
 
 // CallAsync calls the given function asynchronously.
-func (dc *DispatcherClient) CallAsync(funcName string, request interface{}) *AsyncResult {
-	return dc.CallAsyncTimeout(funcName, request, dc.c.RequestTimeout)
-}
-
-// CallAsyncTimeout calls the given function asynchronously with the given timeout.
-func (dc *DispatcherClient) CallAsyncTimeout(funcName string, request interface{}, timeout time.Duration) *AsyncResult {
+func (dc *DispatcherClient) CallAsync(funcName string, request interface{}) (*AsyncResult, error) {
 	req := dc.getRequest(funcName, request)
 
-	innerAr := dc.c.CallAsyncTimeout(req, timeout)
+	innerAr, err := dc.c.CallAsync(req)
+	if err != nil {
+		return nil, err
+	}
 
 	ch := make(chan struct{})
 	ar := &AsyncResult{
@@ -489,7 +487,7 @@ func (dc *DispatcherClient) CallAsyncTimeout(funcName string, request interface{
 		close(ch)
 	}()
 
-	return ar
+	return ar, nil
 }
 
 func (dc *DispatcherClient) getRequest(funcName string, request interface{}) *dispatcherRequest {

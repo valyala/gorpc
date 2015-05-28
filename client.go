@@ -98,7 +98,7 @@ type Client struct {
 	// any time you wish.
 	Stats ConnStats
 
-	requestsChan chan *clientMessage
+	requestsChan chan *AsyncResult
 
 	clientStopChan chan struct{}
 	stopWg         sync.WaitGroup
@@ -131,7 +131,7 @@ func (c *Client) Start() {
 		c.RecvBufferSize = DefaultBufferSize
 	}
 
-	c.requestsChan = make(chan *clientMessage, c.PendingRequests)
+	c.requestsChan = make(chan *AsyncResult, c.PendingRequests)
 	c.clientStopChan = make(chan struct{})
 
 	if c.Conns <= 0 {
@@ -191,37 +191,25 @@ func (c *Client) Call(request interface{}) (response interface{}, err error) {
 //
 // Don't forget starting the client with Client.Start() before calling Client.Call().
 func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (response interface{}, err error) {
-	m := acquireClientMessage(request, false)
+	var m *AsyncResult
+	if m, err = c.CallAsync(request); err != nil {
+		return nil, err
+	}
+
 	t := acquireTimer(timeout)
 
 	select {
-	case c.requestsChan <- m:
-		select {
-		case <-m.Done:
-			response, err = m.Response, m.Error
-
-			m.Response = nil
-			m.Error = nil
-			clientMessagePool.Put(m)
-		case <-t.C:
-			err = fmt.Errorf("gorpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
-			logError("%s", err)
-			err = &ClientError{
-				Timeout: true,
-				err:     err,
-			}
-		}
-	default:
-		m.Request = nil
-		clientMessagePool.Put(m)
-
-		err = fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
+	case <-m.Done:
+		response, err = m.Response, m.Error
+	case <-t.C:
+		err = fmt.Errorf("gorpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
 		logError("%s", err)
 		err = &ClientError{
-			Overflow: true,
-			err:      err,
+			Timeout: true,
+			err:     err,
 		}
 	}
+
 	releaseTimer(t)
 	return
 }
@@ -238,20 +226,12 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 // is totally ignored.
 //
 // Don't forget starting the client with Client.Start() before calling Client.Send().
-func (c *Client) Send(request interface{}) {
-	m := acquireClientMessage(request, true)
-
-	select {
-	case c.requestsChan <- m:
-	default:
-		m.Request = nil
-		clientMessagePool.Put(m)
-
-		logError("gorpc.Client: [%s]. Requests' queue with size=%d is overflown", c.Addr, cap(c.requestsChan))
-	}
+func (c *Client) Send(request interface{}) error {
+	_, err := c.callAsync(request, true)
+	return err
 }
 
-// AsyncResult is a result returned from Client.CallAsync*().
+// AsyncResult is a result returned from Client.CallAsync().
 type AsyncResult struct {
 	// The response can be read only after <-Done unblocks.
 	Response interface{}
@@ -262,38 +242,56 @@ type AsyncResult struct {
 
 	// Response and Error become available after <-Done unblocks.
 	Done <-chan struct{}
+
+	request      interface{}
+	skipResponse bool
+	done         chan struct{}
 }
 
-// CallAsync starts async rpc call, which should be completed
-// during Client.RequestTimeout.
+// CallAsync starts async rpc call.
 //
 // Rpc call is complete after <-AsyncResult.Done unblocks.
 // If you want canceling the request, just throw away the returned AsyncResult.
+//
+// CallAsync doesn't respect Client.RequestTimeout - response timeout
+// may be controlled by the caller via something like:
+//
+// r := c.CallAsync("foobar")
+// select {
+// case <-time.After(c.RequestTimeout):
+//    log.Printf("rpc timeout!")
+// case <-r.Done:
+//    processResponse(r.Response, r.Error)
+// }
 //
 // Don't forget starting the client with Client.Start() before
 // calling Client.CallAsync().
-func (c *Client) CallAsync(request interface{}) *AsyncResult {
-	return c.CallAsyncTimeout(request, c.RequestTimeout)
+func (c *Client) CallAsync(request interface{}) (*AsyncResult, error) {
+	return c.callAsync(request, false)
 }
 
-// CallAsyncTimeout starts async rpc call, which should be completed
-// during the given timeout.
-//
-// Rpc call is complete after <-AsyncResult.Done unblocks.
-// If you want canceling the request, just throw away the returned AsyncResult.
-//
-// Don't forget starting the client with Client.Start() before
-// calling Client.CallAsyncTimeout().
-func (c *Client) CallAsyncTimeout(request interface{}, timeout time.Duration) *AsyncResult {
-	ch := make(chan struct{})
-	r := &AsyncResult{
-		Done: ch,
+func (c *Client) callAsync(request interface{}, skipResponse bool) (ar *AsyncResult, err error) {
+	m := &AsyncResult{
+		request:      request,
+		skipResponse: skipResponse,
 	}
-	go func() {
-		r.Response, r.Error = c.CallTimeout(request, timeout)
-		close(ch)
-	}()
-	return r
+	if !skipResponse {
+		m.done = make(chan struct{})
+		m.Done = m.done
+	}
+
+	select {
+	case c.requestsChan <- m:
+		return m, nil
+	default:
+		err = fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown. Try increasing Client.PendingRequests value", c.Addr, cap(c.requestsChan))
+		logError("%s", err)
+		err = &ClientError{
+			Overflow: true,
+			err:      err,
+		}
+		return nil, err
+	}
 }
 
 // ClientError is an error Client methods can return.
@@ -373,7 +371,7 @@ func clientHandleConnection(c *Client, conn io.ReadWriteCloser) {
 
 	stopChan := make(chan struct{})
 
-	pendingRequests := make(map[uint64]*clientMessage)
+	pendingRequests := make(map[uint64]*AsyncResult)
 	var pendingRequestsLock sync.Mutex
 
 	writerDone := make(chan error, 1)
@@ -407,35 +405,13 @@ func clientHandleConnection(c *Client, conn io.ReadWriteCloser) {
 	}
 	for _, m := range pendingRequests {
 		m.Error = err
-		m.Done <- struct{}{}
-	}
-}
-
-type clientMessage struct {
-	Request      interface{}
-	Response     interface{}
-	SkipResponse bool
-	Error        error
-	Done         chan struct{}
-}
-
-var clientMessagePool sync.Pool
-
-func acquireClientMessage(request interface{}, skipResponse bool) *clientMessage {
-	mv := clientMessagePool.Get()
-	if mv == nil {
-		mv = &clientMessage{
-			Done: make(chan struct{}, 1),
+		if m.done != nil {
+			close(m.done)
 		}
 	}
-
-	m := mv.(*clientMessage)
-	m.Request = request
-	m.SkipResponse = skipResponse
-	return m
 }
 
-func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMessage, pendingRequestsLock *sync.Mutex, stopChan <-chan struct{}, done chan<- error) {
+func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*AsyncResult, pendingRequestsLock *sync.Mutex, stopChan <-chan struct{}, done chan<- error) {
 	var err error
 	defer func() { done <- err }()
 
@@ -447,7 +423,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 	var wr wireRequest
 	var msgID uint64
 	for {
-		var m *clientMessage
+		var m *AsyncResult
 
 		select {
 		case m = <-c.requestsChan:
@@ -470,7 +446,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			flushChan = getFlushChan(t, c.FlushDelay)
 		}
 
-		if m.SkipResponse {
+		if m.skipResponse {
 			wr.ID = 0
 		} else {
 			msgID++
@@ -486,12 +462,8 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 			}
 		}
 
-		wr.SkipResponse = m.SkipResponse
-		wr.Request = m.Request
-		m.Request = nil
-		if m.SkipResponse {
-			clientMessagePool.Put(m)
-		}
+		wr.SkipResponse = m.skipResponse
+		wr.Request = m.request
 		if err = e.Encode(wr); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
 			return
@@ -500,7 +472,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*clientMess
 	}
 }
 
-func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMessage, pendingRequestsLock *sync.Mutex, done chan<- error) {
+func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*AsyncResult, pendingRequestsLock *sync.Mutex, done chan<- error) {
 	var err error
 	defer func() {
 		if r := recover(); r != nil {
@@ -545,7 +517,9 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*clientMess
 			wr.Error = ""
 		}
 
-		m.Done <- struct{}{}
+		if m.done != nil {
+			close(m.done)
+		}
 		c.Stats.incRPCCalls()
 	}
 }

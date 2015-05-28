@@ -6,9 +6,60 @@ import (
 	"math/rand"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func BenchmarkSend1Worker(b *testing.B) {
+	benchmarkSend(b, 1)
+}
+
+func BenchmarkSend10Workers(b *testing.B) {
+	benchmarkSend(b, 10)
+}
+
+func BenchmarkSend100Workers(b *testing.B) {
+	benchmarkSend(b, 100)
+}
+
+func BenchmarkSend1000Workers(b *testing.B) {
+	benchmarkSend(b, 1000)
+}
+
+func BenchmarkSend10000Workers(b *testing.B) {
+	benchmarkSend(b, 10000)
+}
+
+func benchmarkSend(b *testing.B, workersCount int) {
+	var serverCalls uint64
+	N := uint64(b.N)
+	stopCh := make(chan struct{})
+
+	addr := "./gorpc-bench.sock"
+	s := NewUnixServer(addr, func(clientAddr string, request interface{}) interface{} {
+		n := atomic.AddUint64(&serverCalls, 1)
+		if n == N {
+			close(stopCh)
+		}
+		return nil
+	})
+
+	c := NewUnixClient(addr)
+	c.Conns = runtime.GOMAXPROCS(-1)
+	c.PendingRequests = 100000
+
+	benchClientServerExt(b, workersCount, c, s, func(n int) {
+	start:
+		if err := c.Send(42); err != nil {
+			if err.(*ClientError).Overflow {
+				time.Sleep(time.Millisecond)
+				goto start
+			}
+			b.Fatalf("Unexpected error in Send() on iteration %d: [%s]", n, err)
+		}
+	}, func() { <-stopCh })
+}
 
 func BenchmarkDispatcher1Worker(b *testing.B) {
 	benchmarkDispatcher(b, 1)
@@ -417,6 +468,10 @@ func benchEchoFunc(b *testing.B, workers int, disableCompression, isUnixTranspor
 }
 
 func benchClientServer(b *testing.B, workers int, c *Client, s *Server, f func(int)) {
+	benchClientServerExt(b, workers, c, s, f, func() {})
+}
+
+func benchClientServerExt(b *testing.B, workers int, c *Client, s *Server, f func(int), waitF func()) {
 	if err := s.Start(); err != nil {
 		b.Fatalf("Cannot start gorpc server: [%s]", err)
 	}
@@ -427,26 +482,25 @@ func benchClientServer(b *testing.B, workers int, c *Client, s *Server, f func(i
 
 	var wg sync.WaitGroup
 
-	ch := make(chan int, 100000)
+	var x uint64
+	N := uint64(b.N)
 
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
 
 		go func() {
 			defer wg.Done()
-			for n := range ch {
-				f(n)
+			for {
+				n := atomic.AddUint64(&x, 1)
+				if n > N {
+					break
+				}
+				f(int(n))
 			}
 		}()
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		ch <- i
-	}
-
-	close(ch)
-
+	waitF()
 	wg.Wait()
 }
 

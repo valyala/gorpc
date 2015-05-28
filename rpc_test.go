@@ -347,33 +347,41 @@ func TestServerStuck(t *testing.T) {
 	c := &Client{
 		Addr:            addr,
 		PendingRequests: 100,
-		RequestTimeout:  300 * time.Millisecond,
 	}
 	c.Start()
 	defer c.Stop()
 
 	var res [1500]*AsyncResult
+	var err error
 	for j := 0; j < 15; j++ {
 		for i := 0; i < 100; i++ {
-			res[i+100*j] = c.CallAsync("abc")
+			res[i+100*j], err = c.CallAsync("abc")
+			if err != nil {
+				t.Fatalf("Unexpected error in CallAsync: [%s]", err)
+			}
 		}
 		// This should prevent from overflow errors.
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	timeoutErrors := 0
 	stuckErrors := 0
+
+	timer := acquireTimer(300 * time.Millisecond)
+	defer releaseTimer(timer)
 
 	for i := 0; i < 1500; i++ {
 		r := res[i]
-		<-r.Done
+		select {
+		case <-r.Done:
+		case <-timer.C:
+			goto exit
+		}
+
 		if r.Error == nil {
 			t.Fatalf("Stuck server returned response? %+v", r.Response)
 		}
 		ce := r.Error.(*ClientError)
-		if ce.Timeout {
-			timeoutErrors++
-		} else if ce.Connection {
+		if ce.Connection {
 			stuckErrors++
 		} else if !ce.Overflow {
 			t.Fatalf("Unexpected error returned: [%s]", ce)
@@ -382,9 +390,10 @@ func TestServerStuck(t *testing.T) {
 			t.Fatalf("Unexpected response from stuck server: %+v", r.Response)
 		}
 	}
+exit:
 
-	if timeoutErrors > stuckErrors {
-		t.Fatalf("Stuck server detector doesn't work? timeoutErrors=%d > stuckErrors=%d", timeoutErrors, stuckErrors)
+	if stuckErrors == 0 {
+		t.Fatalf("Stuck server detector doesn't work?")
 	}
 }
 
@@ -564,8 +573,12 @@ func TestConcurrency(t *testing.T) {
 	c.Start()
 	defer c.Stop()
 
-	c.Send(100)
-	c.Send(100)
+	if err := c.Send(100); err != nil {
+		t.Fatalf("Unepxected error in Send(): [%s]", err)
+	}
+	if err := c.Send(100); err != nil {
+		t.Fatalf("Unepxected error in Send(): [%s]", err)
+	}
 
 	resp, err := c.CallTimeout(5, 50*time.Millisecond)
 	if err == nil {
@@ -714,7 +727,9 @@ func TestSend(t *testing.T) {
 
 	wg.Add(100)
 	for i := 0; i < 100; i++ {
-		c.Send(12345)
+		if err := c.Send(12345); err != nil {
+			t.Fatalf("Unexpected error in Send(): [%s]", err)
+		}
 	}
 	wg.Wait()
 }
@@ -733,7 +748,9 @@ func TestMixedCallSend(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		for i := 0; i < 1000; i++ {
-			c.Send("123211")
+			if err := c.Send("123211"); err != nil {
+				t.Fatalf("Unexpected error in Send(): [%s]", err)
+			}
 		}
 		testIntClient(t, c)
 	}
@@ -757,8 +774,12 @@ func TestCallAsync(t *testing.T) {
 	defer c.Stop()
 
 	var res [10]*AsyncResult
+	var err error
 	for i := 0; i < 10; i++ {
-		res[i] = c.CallAsync(i)
+		res[i], err = c.CallAsync(i)
+		if err != nil {
+			t.Fatalf("Unexpected error in CallAsync: [%s]", err)
+		}
 	}
 	for i := 0; i < 10; i++ {
 		r := res[i]

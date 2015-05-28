@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"sync/atomic"
 	"testing"
 	"unsafe"
 )
@@ -719,22 +720,24 @@ func TestDispatcherSend(t *testing.T) {
 
 	N := 10
 	ch := make(chan struct{}, N)
-	serverS := 0
-	clientS := 0
+	serverS := uint32(0)
+	clientS := uint32(0)
 	d.AddFunc("Sum", func(n int) {
-		serverS += n
+		atomic.AddUint32(&serverS, uint32(n))
 		ch <- struct{}{}
 	})
 
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		for i := 0; i < N; i++ {
-			dc.Send("Sum", i)
-			clientS += i
+			if err := dc.Send("Sum", i); err != nil {
+				t.Fatalf("Unexpected error in Send(): [%s]", err)
+			}
+			clientS += uint32(i)
 		}
 		for i := 0; i < N; i++ {
 			<-ch
 		}
-		if serverS != clientS {
+		if atomic.LoadUint32(&serverS) != clientS {
 			t.Fatalf("Unepxected serverS=%d. Should be %d", serverS, clientS)
 		}
 	})
@@ -748,8 +751,12 @@ func TestDispatcherCallAsync(t *testing.T) {
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		N := 10
 		ar := make([]*AsyncResult, N)
+		var err error
 		for i := 0; i < N; i++ {
-			ar[i] = dc.CallAsync("aaa", i)
+			ar[i], err = dc.CallAsync("aaa", i)
+			if err != nil {
+				t.Fatalf("Unexpected error in CallAsync: [%s]", err)
+			}
 		}
 		for i := 0; i < N; i++ {
 			r := ar[i]
