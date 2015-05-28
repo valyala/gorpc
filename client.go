@@ -424,9 +424,8 @@ var clientMessagePool sync.Pool
 func acquireClientMessage(request interface{}, skipResponse bool) *clientMessage {
 	mv := clientMessagePool.Get()
 	if mv == nil {
-		return &clientMessage{
-			Request: request,
-			Done:    make(chan struct{}, 1),
+		mv = &clientMessage{
+			Done: make(chan struct{}, 1),
 		}
 	}
 
