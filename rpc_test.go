@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -1057,4 +1058,132 @@ func TestCompress(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestBatchCall(t *testing.T) {
+	addr := "./test-batch-call.sock"
+	s := NewUnixServer(addr, echoHandler)
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := NewUnixClient(addr)
+	c.Start()
+	defer c.Stop()
+
+	b := c.NewBatch()
+
+	N := 100
+	results := make([]*BatchResult, N)
+	for i := 0; i < N; i++ {
+		results[i] = b.Add(i)
+	}
+	if err := b.Call(); err != nil {
+		t.Fatalf("Unexpected error when calling batch rpcs: [%s]", err)
+	}
+
+	for i := 0; i < N; i++ {
+		r := results[i]
+		if r.Error != nil {
+			t.Fatalf("Unexpected error in batch result %d: [%s]", i, r.Error)
+		}
+		if r.Response.(int) != i {
+			t.Fatalf("Unexpected response in batch result %d: %+v", i, r.Response)
+		}
+
+		select {
+		case <-r.Done:
+		case <-time.After(10 * time.Millisecond):
+			t.Fatalf("%d BatchResult.Done must be unblocked after Batch.Call()", i)
+		}
+	}
+}
+
+func TestBatchCallTimeout(t *testing.T) {
+	addr := "./test-batch-call-timeout.sock"
+	s := NewUnixServer(addr, func(remoteAddr string, request interface{}) interface{} {
+		time.Sleep(200 * time.Millisecond)
+		return 123
+	})
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := NewUnixClient(addr)
+	c.Start()
+	defer c.Stop()
+
+	b := c.NewBatch()
+
+	N := 100
+	results := make([]*BatchResult, N)
+	for i := 0; i < N; i++ {
+		results[i] = b.Add(i)
+	}
+	err := b.CallTimeout(10 * time.Millisecond)
+	if err == nil {
+		t.Fatalf("Unexpected nil error when calling Batch.CallTimeout()")
+	}
+	if !err.(*ClientError).Timeout {
+		t.Fatalf("Unexpected error in Batch.CallTimeout(): [%s]", err)
+	}
+
+	for i := 0; i < N; i++ {
+		r := results[i]
+		if r.Error == nil {
+			t.Fatalf("Unexpected nil error in batch result %d", i)
+		}
+		if !r.Error.(*ClientError).Timeout {
+			t.Fatalf("Unexpected error in batch result %d: [%s]", i, r.Error)
+		}
+		if r.Response != nil {
+			t.Fatalf("Unexpected response in batch result %d: %+v", i, r.Response)
+		}
+
+		select {
+		case <-r.Done:
+		case <-time.After(10 * time.Millisecond):
+			t.Fatalf("%d BatchResult.Done must be unblocked after Batch.Call()", i)
+		}
+	}
+}
+
+func TestBatchCallSkipResponse(t *testing.T) {
+	N := 100
+	serverCallsCounter := uint32(0)
+	doneCh := make(chan struct{})
+
+	addr := "./test-batch-call-skip-response.sock"
+	s := NewUnixServer(addr, func(remoteAdrr string, request interface{}) interface{} {
+		n := atomic.AddUint32(&serverCallsCounter, 1)
+		if n == uint32(N) {
+			close(doneCh)
+		}
+		return nil
+	})
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := NewUnixClient(addr)
+	c.Start()
+	defer c.Stop()
+
+	b := c.NewBatch()
+	for i := 0; i < N; i++ {
+		b.AddSkipResponse(i)
+	}
+	err := b.Call()
+	if err != nil {
+		t.Fatalf("Unexpected error when calling Batch.CallTimeout(): [%s]", err)
+	}
+
+	select {
+	case <-doneCh:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("It looks like server didn't receive batched requests")
+	}
 }

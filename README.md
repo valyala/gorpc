@@ -17,6 +17,9 @@ with RPC:
 * It minimizes the number of recv() syscalls by reading and buffering as much
   as possible data from the network.
 
+* It supports RPC batching, which allows preparing multiple requests and sending
+  them to the server in a single batch.
+
 These features help the OS minimizing overhead (CPU load, the number of
 TCP connections in TIME_WAIT and CLOSE_WAIT states, the number of network
 packets and the amount of network bandwidth) required for RPC processing under
