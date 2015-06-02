@@ -304,6 +304,8 @@ type Batch struct {
 }
 
 // BatchResult is a result returned from Batch.Add*().
+//
+// The order of batched RPCs execution on the server is undefined.
 type BatchResult struct {
 	// The response can be read only after Batch.Call*() returns.
 	Response interface{}
@@ -334,6 +336,8 @@ func (c *Client) NewBatch() *Batch {
 
 // Add ads new request to the RPC batch.
 //
+// The order of batched RPCs execution on the server is undefined.
+//
 // All the requests added to the batch are sent to the server at once
 // when Batch.Call*() is called.
 //
@@ -345,6 +349,8 @@ func (b *Batch) Add(request interface{}) *BatchResult {
 
 // AddSkipResponse adds new request to the RPC batch and doesn't care
 // about the response.
+//
+// The order of batched RPCs execution on the server is undefined.
 //
 // All the requests added to the batch are sent to the server at once
 // when Batch.Call*() is called.
@@ -372,6 +378,8 @@ func (b *Batch) add(request interface{}, skipResponse bool) *BatchResult {
 }
 
 // Call calls all the RPCs added via Batch.Add().
+//
+// The order of batched RPCs execution on the server is undefined.
 //
 // The caller may read all BatchResult contents returned from Batch.Add()
 // after the Call returns.
