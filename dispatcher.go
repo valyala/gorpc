@@ -54,7 +54,7 @@ func NewDispatcher() *Dispatcher {
 //
 // Arbitrary number of functions can be registered in the dispatcher.
 //
-// Se examples for details.
+// See examples for details.
 func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
 	sd, ok := d.serviceMap[""]
 	if !ok {
