@@ -94,7 +94,7 @@ func ExampleDispatcher_AddFunc() {
 	})
 }
 
-func ExampleDispatcher_NewBatch() {
+func ExampleDispatcherClient_NewBatch() {
 	// Create new dispatcher.
 	d := NewDispatcher()
 
