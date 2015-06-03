@@ -1077,7 +1077,15 @@ func TestBatchCall(t *testing.T) {
 	N := 100
 	results := make([]*BatchResult, N)
 	for i := 0; i < N; i++ {
-		results[i] = b.Add(i)
+		r := b.Add(i)
+
+		select {
+		case <-r.Done:
+			t.Fatalf("%d. <-Done must be locked before Batch.Call()", i)
+		default:
+		}
+
+		results[i] = r
 	}
 	if err := b.Call(); err != nil {
 		t.Fatalf("Unexpected error when calling batch rpcs: [%s]", err)
@@ -1120,7 +1128,15 @@ func TestBatchCallTimeout(t *testing.T) {
 	N := 100
 	results := make([]*BatchResult, N)
 	for i := 0; i < N; i++ {
-		results[i] = b.Add(i)
+		r := b.Add(i)
+
+		select {
+		case <-r.Done:
+			t.Fatalf("%d. <-Done must be locked before Batch.Call()", i)
+		default:
+		}
+
+		results[i] = r
 	}
 	err := b.CallTimeout(10 * time.Millisecond)
 	if err == nil {
@@ -1144,7 +1160,7 @@ func TestBatchCallTimeout(t *testing.T) {
 
 		select {
 		case <-r.Done:
-		case <-time.After(10 * time.Millisecond):
+		default:
 			t.Fatalf("%d BatchResult.Done must be unblocked after Batch.Call()", i)
 		}
 	}
@@ -1213,7 +1229,16 @@ func TestBatchCallMixed(t *testing.T) {
 
 	results := make([]*BatchResult, N)
 	for i := 0; i < N; i++ {
-		results[i] = b.Add(i)
+		r := b.Add(i)
+
+		select {
+		case <-r.Done:
+			t.Fatalf("%d. <-Done must be locked before Batch.Call()", i)
+		default:
+		}
+
+		results[i] = r
+
 		b.AddSkipResponse(i + N)
 	}
 	if err := b.Call(); err != nil {
@@ -1231,7 +1256,7 @@ func TestBatchCallMixed(t *testing.T) {
 
 		select {
 		case <-r.Done:
-		case <-time.After(10 * time.Millisecond):
+		default:
 			t.Fatalf("%d BatchResult.Done must be unblocked after Batch.Call()", i)
 		}
 	}

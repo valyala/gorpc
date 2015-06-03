@@ -94,6 +94,53 @@ func ExampleDispatcher_AddFunc() {
 	})
 }
 
+func ExampleDispatcher_NewBatch() {
+	// Create new dispatcher.
+	d := NewDispatcher()
+
+	// Register echo function in the dispatcher.
+	d.AddFunc("Echo", func(x int) int { return x })
+
+	// Start the server serving all the registered functions above
+	s := NewTCPServer(":12445", d.NewHandlerFunc())
+	if err := s.Start(); err != nil {
+		log.Fatalf("Cannot start rpc server: [%s]", err)
+	}
+	defer s.Stop()
+
+	// Start the client and connect it to the server
+	c := NewTCPClient(":12445")
+	c.Start()
+	defer c.Stop()
+
+	// Create a client wrapper for calling server functions.
+	dc := d.NewFuncClient(c)
+
+	// Create new batch for calling server functions.
+	b := dc.NewBatch()
+	result := make([]*BatchResult, 3)
+
+	// Add RPC messages to the batch.
+	for i := 0; i < 3; i++ {
+		result[i] = b.Add("Echo", i)
+	}
+
+	// Invoke all the RPCs added to the batch.
+	if err := b.Call(); err != nil {
+		log.Fatalf("error when calling RPC batch: [%s]", err)
+	}
+
+	for i := 0; i < 3; i++ {
+		r := result[i]
+		fmt.Printf("response[%d]=%+v, %+v\n", i, r.Response, r.Error)
+	}
+
+	// Output:
+	// response[0]=0, <nil>
+	// response[1]=1, <nil>
+	// response[2]=2, <nil>
+}
+
 func ExampleDispatcher_funcCalls() {
 	d := NewDispatcher()
 
