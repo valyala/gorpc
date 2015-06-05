@@ -3,13 +3,24 @@ package gorpc
 import (
 	"io"
 	"sync"
+	"time"
 )
 
 // ConnStats provides connection statistics. Applied to both gorpc.Client
 // and gorpc.Server.
+//
+// Use stats returned from ConnStats.Snapshot() on live Client and / or Server,
+// since the original stats can be updated by concurrently running goroutines.
 type ConnStats struct {
 	// The number of rpc calls performed.
 	RPCCalls uint64
+
+	// The total aggregate time for all rpc calls in milliseconds.
+	//
+	// This time can be used for calculating the average response time
+	// per RPC:
+	//     avgRPCTtime = RPCTime / RPCCalls
+	RPCTime uint64
 
 	// The number of bytes written to the underlying connections.
 	BytesWritten uint64
@@ -43,6 +54,30 @@ type ConnStats struct {
 
 	// lock is for 386 builds. See https://github.com/valyala/gorpc/issues/5 .
 	lock sync.Mutex
+}
+
+// AvgRPCTime returns the average RPC execution time.
+//
+// Use stats returned from ConnStats.Snapshot() on live Client and / or Server,
+// since the original stats can be updated by concurrently running goroutines.
+func (cs *ConnStats) AvgRPCTime() time.Duration {
+	return time.Duration(float64(cs.RPCTime)/float64(cs.RPCCalls)) * time.Millisecond
+}
+
+// AvgRPCBytes returns the average bytes sent / received per RPC.
+//
+// Use stats returned from ConnStats.Snapshot() on live Client and / or Server,
+// since the original stats can be updated by concurrently running goroutines.
+func (cs *ConnStats) AvgRPCBytes() (send float64, recv float64) {
+	return float64(cs.BytesWritten) / float64(cs.RPCCalls), float64(cs.BytesRead) / float64(cs.RPCCalls)
+}
+
+// AvgRPCCalls returns the average number of write() / read() syscalls per PRC.
+//
+// Use stats returned from ConnStats.Snapshot() on live Client and / or Server,
+// since the original stats can be updated by concurrently running goroutines.
+func (cs *ConnStats) AvgRPCCalls() (write float64, read float64) {
+	return float64(cs.WriteCalls) / float64(cs.RPCCalls), float64(cs.ReadCalls) / float64(cs.RPCCalls)
 }
 
 type writerCounter struct {

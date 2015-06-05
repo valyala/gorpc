@@ -22,9 +22,8 @@ func RegisterType(x interface{}) {
 }
 
 type wireRequest struct {
-	ID           uint64
-	Request      interface{}
-	SkipResponse bool
+	ID      uint64
+	Request interface{}
 }
 
 type wireResponse struct {

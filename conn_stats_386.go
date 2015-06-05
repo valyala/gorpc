@@ -9,15 +9,33 @@ import (
 	"sync/atomic"
 )
 
+// Snapshot returns connection statistics' snapshot.
+//
+// Use stats returned from ConnStats.Snapshot() on live Client and / or Server,
+// since the original stats can be updated by concurrently running goroutines.
+func (cs *ConnStats) Snapshot() *ConnStats {
+	cs.lock.Lock()
+	snapshot := *cs
+	cs.lock.Unlock()
+
+	return snapshot
+}
+
 func (cs *ConnStats) incRPCCalls() {
 	cs.lock.Lock()
 	cs.RPCCalls++
 	cs.lock.Unlock()
 }
 
+func (cs *ConnStats) incRPCTime(dt int) {
+	cs.lock.Lock()
+	cs.RPCTime += dt
+	cs.lock.Unlock()
+}
+
 func (cs *ConnStats) addBytesWritten(n uint64) {
 	cs.lock.Lock()
-	cs.BytesWritten++
+	cs.BytesWritten += n
 	cs.lock.Unlock()
 }
 

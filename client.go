@@ -248,6 +248,7 @@ type AsyncResult struct {
 	Done <-chan struct{}
 
 	request interface{}
+	t       time.Time
 	done    chan struct{}
 }
 
@@ -278,6 +279,7 @@ func (c *Client) callAsync(request interface{}, skipResponse bool) (ar *AsyncRes
 		request: request,
 	}
 	if !skipResponse {
+		m.t = time.Now()
 		m.done = make(chan struct{})
 		m.Done = m.done
 	}
@@ -621,20 +623,30 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*AsyncResul
 			wr.ID = 0
 		} else {
 			msgID++
-			wr.ID = msgID
+			if msgID == 0 {
+				msgID = 1
+			}
 			pendingRequestsLock.Lock()
 			n := len(pendingRequests)
-			pendingRequests[wr.ID] = m
+			for {
+				if _, ok := pendingRequests[msgID]; !ok {
+					break
+				}
+				msgID++
+			}
+			pendingRequests[msgID] = m
 			pendingRequestsLock.Unlock()
 
 			if n > 10*c.PendingRequests {
 				err = fmt.Errorf("gorpc.Client: [%s]. The server didn't return %d responses yet. Closing server connection in order to prevent client resource leaks", c.Addr, n)
 				return
 			}
+
+			wr.ID = msgID
 		}
 
-		wr.SkipResponse = (m.done == nil)
 		wr.Request = m.request
+		m.request = nil
 		if err = e.Encode(wr); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
 			return
@@ -688,9 +700,9 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*AsyncResul
 			wr.Error = ""
 		}
 
-		if m.done != nil {
-			close(m.done)
-		}
+		close(m.done)
+
 		c.Stats.incRPCCalls()
+		c.Stats.incRPCTime(uint64(time.Since(m.t).Seconds() * 1000))
 	}
 }

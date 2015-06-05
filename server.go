@@ -269,12 +269,11 @@ func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr strin
 }
 
 type serverMessage struct {
-	ID           uint64
-	Request      interface{}
-	Response     interface{}
-	SkipResponse bool
-	Error        string
-	ClientAddr   string
+	ID         uint64
+	Request    interface{}
+	Response   interface{}
+	Error      string
+	ClientAddr string
 }
 
 var serverMessagePool = &sync.Pool{
@@ -306,12 +305,10 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 		m := serverMessagePool.Get().(*serverMessage)
 		m.ID = wr.ID
 		m.Request = wr.Request
-		m.SkipResponse = wr.SkipResponse
 		m.ClientAddr = clientAddr
 
 		wr.ID = 0
 		wr.Request = nil
-		wr.SkipResponse = false
 
 		select {
 		case workersCh <- struct{}{}:
@@ -322,17 +319,16 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 				return
 			}
 		}
-		go serveRequest(s.Handler, s.Addr, responsesChan, stopChan, m, workersCh)
+		go serveRequest(s.Handler, s.Addr, &s.Stats, responsesChan, stopChan, m, workersCh)
 	}
 }
 
-func serveRequest(handler HandlerFunc, serverAddr string, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, m *serverMessage, workersCh <-chan struct{}) {
+func serveRequest(handler HandlerFunc, serverAddr string, stats *ConnStats, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, m *serverMessage, workersCh <-chan struct{}) {
 	request := m.Request
 	m.Request = nil
 	clientAddr := m.ClientAddr
 	m.ClientAddr = ""
-	skipResponse := m.SkipResponse
-	m.SkipResponse = false
+	skipResponse := (m.ID == 0)
 
 	if skipResponse {
 		m.Response = nil
@@ -340,7 +336,9 @@ func serveRequest(handler HandlerFunc, serverAddr string, responsesChan chan<- *
 		serverMessagePool.Put(m)
 	}
 
+	t := time.Now()
 	response, err := callHandlerWithRecover(handler, clientAddr, serverAddr, request)
+	stats.incRPCTime(uint64(time.Since(t).Seconds() * 1000))
 
 	if !skipResponse {
 		m.Response = response
@@ -421,6 +419,7 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 		}
 		wr.Response = nil
 		wr.Error = ""
+
 		s.Stats.incRPCCalls()
 	}
 }
