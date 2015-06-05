@@ -55,9 +55,11 @@ func SetErrorLogger(f LoggerFunc) {
 	errorLogger = f
 }
 
-func logError(format string, args ...interface{}) {
-	errorLogger(format, args...)
-}
+// NilErrorLogger discards all error messages.
+//
+// Pass NilErrorLogger to SetErrorLogger() in order to suppress error log generated
+// by gorpc.
+func NilErrorLogger(format string, args ...interface{}) {}
 
 func logPanic(format string, args ...interface{}) {
 	errorLogger(format, args...)

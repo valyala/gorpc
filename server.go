@@ -93,6 +93,11 @@ type Server struct {
 	// By default it returns TCP connections accepted from Server.Addr.
 	Listener Listener
 
+	// LogError is used for error logging.
+	//
+	// By default the function set via SetErrorLogger() is used.
+	LogError LoggerFunc
+
 	// Connection statistics.
 	//
 	// The stats doesn't reset automatically. Feel free resetting it
@@ -110,6 +115,9 @@ type Server struct {
 // There is no need in registering base Go types such as int, string, bool,
 // float64, etc. or arrays, slices and maps containing base Go types.
 func (s *Server) Start() error {
+	if s.LogError == nil {
+		s.LogError = errorLogger
+	}
 	if s.Handler == nil {
 		panic("gorpc.Server: Server.Handler cannot be nil")
 	}
@@ -140,7 +148,7 @@ func (s *Server) Start() error {
 	}
 	if err := s.Listener.Init(s.Addr); err != nil {
 		err = fmt.Errorf("gorpc.Server: [%s]. Cannot listen to: [%s]", s.Addr, err)
-		logError("%s", err)
+		s.LogError("%s", err)
 		return err
 	}
 
@@ -180,7 +188,7 @@ func serverHandler(s *Server, workersCh chan struct{}) {
 		acceptChan := make(chan struct{})
 		go func() {
 			if conn, clientAddr, err = s.Listener.Accept(); err != nil {
-				logError("gorpc.Server: [%s]. Cannot accept new connection: [%s]", s.Addr, err)
+				s.LogError("gorpc.Server: [%s]. Cannot accept new connection: [%s]", s.Addr, err)
 				time.Sleep(time.Second)
 			}
 			close(acceptChan)
@@ -210,7 +218,7 @@ func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr strin
 	if s.OnConnect != nil {
 		newConn, err := s.OnConnect(clientAddr, conn)
 		if err != nil {
-			logError("gorpc.Server: [%s]->[%s]. OnConnect error: [%s]", clientAddr, s.Addr, err)
+			s.LogError("gorpc.Server: [%s]->[%s]. OnConnect error: [%s]", clientAddr, s.Addr, err)
 			conn.Close()
 			return
 		}
@@ -223,7 +231,7 @@ func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr strin
 	go func() {
 		var buf [1]byte
 		if _, err = conn.Read(buf[:]); err != nil {
-			logError("gorpc.Server: [%s]->[%s]. Error when reading handshake from client: [%s]", clientAddr, s.Addr, err)
+			s.LogError("gorpc.Server: [%s]->[%s]. Error when reading handshake from client: [%s]", clientAddr, s.Addr, err)
 		}
 		zChan <- (buf[0] != 0)
 	}()
@@ -237,7 +245,7 @@ func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr strin
 		conn.Close()
 		return
 	case <-time.After(10 * time.Second):
-		logError("gorpc.Server: [%s]->[%s]. Cannot obtain handshake from client during 10s", clientAddr, s.Addr)
+		s.LogError("gorpc.Server: [%s]->[%s]. Cannot obtain handshake from client during 10s", clientAddr, s.Addr)
 		conn.Close()
 		return
 	}
@@ -287,7 +295,7 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 
 	defer func() {
 		if r := recover(); r != nil {
-			logError("gorpc.Server: [%s]->[%s]. Panic when reading data from client: %v", clientAddr, s.Addr, r)
+			s.LogError("gorpc.Server: [%s]->[%s]. Panic when reading data from client: %v", clientAddr, s.Addr, r)
 		}
 		close(done)
 	}()
@@ -298,7 +306,7 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 	var wr wireRequest
 	for {
 		if err := d.Decode(&wr); err != nil {
-			logError("gorpc.Server: [%s]->[%s]. Cannot decode request: [%s]", clientAddr, s.Addr, err)
+			s.LogError("gorpc.Server: [%s]->[%s]. Cannot decode request: [%s]", clientAddr, s.Addr, err)
 			return
 		}
 
@@ -319,11 +327,11 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 				return
 			}
 		}
-		go serveRequest(s.Handler, s.Addr, &s.Stats, responsesChan, stopChan, m, workersCh)
+		go serveRequest(s, responsesChan, stopChan, m, workersCh)
 	}
 }
 
-func serveRequest(handler HandlerFunc, serverAddr string, stats *ConnStats, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, m *serverMessage, workersCh <-chan struct{}) {
+func serveRequest(s *Server, responsesChan chan<- *serverMessage, stopChan <-chan struct{}, m *serverMessage, workersCh <-chan struct{}) {
 	request := m.Request
 	m.Request = nil
 	clientAddr := m.ClientAddr
@@ -337,8 +345,8 @@ func serveRequest(handler HandlerFunc, serverAddr string, stats *ConnStats, resp
 	}
 
 	t := time.Now()
-	response, err := callHandlerWithRecover(handler, clientAddr, serverAddr, request)
-	stats.incRPCTime(uint64(time.Since(t).Seconds() * 1000))
+	response, err := callHandlerWithRecover(s.LogError, s.Handler, clientAddr, s.Addr, request)
+	s.Stats.incRPCTime(uint64(time.Since(t).Seconds() * 1000))
 
 	if !skipResponse {
 		m.Response = response
@@ -359,13 +367,13 @@ func serveRequest(handler HandlerFunc, serverAddr string, stats *ConnStats, resp
 	<-workersCh
 }
 
-func callHandlerWithRecover(handler HandlerFunc, clientAddr, serverAddr string, request interface{}) (response interface{}, errStr string) {
+func callHandlerWithRecover(logErrorFunc LoggerFunc, handler HandlerFunc, clientAddr, serverAddr string, request interface{}) (response interface{}, errStr string) {
 	defer func() {
 		if x := recover(); x != nil {
 			stackTrace := make([]byte, 1<<20)
 			n := runtime.Stack(stackTrace, false)
 			errStr = fmt.Sprintf("Panic occured: %v\nStack trace: %s", x, stackTrace[:n])
-			logError("gorpc.Server: [%s]->[%s]. %s", clientAddr, serverAddr, errStr)
+			logErrorFunc("gorpc.Server: [%s]->[%s]. %s", clientAddr, serverAddr, errStr)
 		}
 	}()
 	response = handler(clientAddr, request)
@@ -393,7 +401,7 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 			case m = <-responsesChan:
 			case <-flushChan:
 				if err := e.Flush(); err != nil {
-					logError("gorpc.Server: [%s]->[%s]: Cannot flush responses to underlying stream: [%s]", clientAddr, s.Addr, err)
+					s.LogError("gorpc.Server: [%s]->[%s]: Cannot flush responses to underlying stream: [%s]", clientAddr, s.Addr, err)
 					return
 				}
 				flushChan = nil
@@ -414,7 +422,7 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 		serverMessagePool.Put(m)
 
 		if err := e.Encode(wr); err != nil {
-			logError("gorpc.Server: [%s]->[%s]. Cannot send response to wire: [%s]", clientAddr, s.Addr, err)
+			s.LogError("gorpc.Server: [%s]->[%s]. Cannot send response to wire: [%s]", clientAddr, s.Addr, err)
 			return
 		}
 		wr.Response = nil

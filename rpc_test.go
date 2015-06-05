@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	SetErrorLogger(func(format string, args ...interface{}) {})
+	SetErrorLogger(NilErrorLogger)
 }
 
 func echoHandler(clientAddr string, request interface{}) interface{} {

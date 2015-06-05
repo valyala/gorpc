@@ -92,6 +92,11 @@ type Client struct {
 	// By default it returns TCP connections established to the Client.Addr.
 	Dial DialFunc
 
+	// LogError is used for error logging.
+	//
+	// By default the function set via SetErrorLogger() is used.
+	LogError LoggerFunc
+
 	// Connection statistics.
 	//
 	// The stats doesn't reset automatically. Feel free resetting it
@@ -111,6 +116,9 @@ type Client struct {
 // There is no need in registering base Go types such as int, string, bool,
 // float64, etc. or arrays, slices and maps containing base Go types.
 func (c *Client) Start() {
+	if c.LogError == nil {
+		c.LogError = errorLogger
+	}
 	if c.clientStopChan != nil {
 		panic("gorpc.Client: the given client is already started. Call Client.Stop() before calling Client.Start() again!")
 	}
@@ -140,6 +148,7 @@ func (c *Client) Start() {
 	if c.Dial == nil {
 		c.Dial = defaultDial
 	}
+
 	for i := 0; i < c.Conns; i++ {
 		c.stopWg.Add(1)
 		go clientHandler(c)
@@ -211,7 +220,7 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 
 func getClientTimeoutError(c *Client, timeout time.Duration) error {
 	err := fmt.Errorf("gorpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
-	logError("%s", err)
+	c.LogError("%s", err)
 	return &ClientError{
 		Timeout: true,
 		err:     err,
@@ -289,7 +298,7 @@ func (c *Client) callAsync(request interface{}, skipResponse bool) (ar *AsyncRes
 		return m, nil
 	default:
 		err = fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown. Try increasing Client.PendingRequests value", c.Addr, cap(c.requestsChan))
-		logError("%s", err)
+		c.LogError("%s", err)
 		err = &ClientError{
 			Overflow: true,
 			err:      err,
@@ -499,7 +508,7 @@ func clientHandler(c *Client) {
 		dialChan := make(chan struct{})
 		go func() {
 			if conn, err = c.Dial(c.Addr); err != nil {
-				logError("gorpc.Client: [%s]. Cannot establish rpc connection: [%s]", c.Addr, err)
+				c.LogError("gorpc.Client: [%s]. Cannot establish rpc connection: [%s]", c.Addr, err)
 				time.Sleep(time.Second)
 			}
 			close(dialChan)
@@ -524,7 +533,7 @@ func clientHandleConnection(c *Client, conn io.ReadWriteCloser) {
 	if c.OnConnect != nil {
 		newConn, err := c.OnConnect(c.Addr, conn)
 		if err != nil {
-			logError("gorpc.Client: [%s]. OnConnect error: [%s]", c.Addr, err)
+			c.LogError("gorpc.Client: [%s]. OnConnect error: [%s]", c.Addr, err)
 			conn.Close()
 			return
 		}
@@ -537,7 +546,7 @@ func clientHandleConnection(c *Client, conn io.ReadWriteCloser) {
 	}
 	_, err := conn.Write(buf[:])
 	if err != nil {
-		logError("gorpc.Client: [%s]. Error when writing handshake to server: [%s]", c.Addr, err)
+		c.LogError("gorpc.Client: [%s]. Error when writing handshake to server: [%s]", c.Addr, err)
 		conn.Close()
 		return
 	}
@@ -570,7 +579,7 @@ func clientHandleConnection(c *Client, conn io.ReadWriteCloser) {
 	}
 
 	if err != nil {
-		logError("%s", err)
+		c.LogError("%s", err)
 		err = &ClientError{
 			Connection: true,
 			err:        err,
