@@ -4,7 +4,15 @@ import (
 	"bufio"
 	"compress/flate"
 	"encoding/gob"
+	"encoding/json"
 	"io"
+)
+
+type EncodingFormat uint8
+
+const (
+	ENCODING_GOB = 0
+	ENCODING_JSON = 1
 )
 
 // RegisterType registers the given type to send via rpc.
@@ -33,8 +41,16 @@ type wireResponse struct {
 	Error    string
 }
 
+type Encoder interface {
+	Encode(v interface{}) error
+}
+
+type Decoder interface {
+	Decode(v interface{}) error
+}
+
 type messageEncoder struct {
-	e  *gob.Encoder
+	e  Encoder
 	bw *bufio.Writer
 	zw *flate.Writer
 	ww *bufio.Writer
@@ -66,7 +82,7 @@ func (e *messageEncoder) Encode(msg interface{}) error {
 	return e.e.Encode(msg)
 }
 
-func newMessageEncoder(w io.Writer, bufferSize int, enableCompression bool, s *ConnStats) *messageEncoder {
+func newMessageEncoder(w io.Writer, bufferSize int, enableCompression bool, s *ConnStats, f EncodingFormat) *messageEncoder {
 	w = newWriterCounter(w, s)
 	bw := bufio.NewWriterSize(w, bufferSize)
 
@@ -77,8 +93,16 @@ func newMessageEncoder(w io.Writer, bufferSize int, enableCompression bool, s *C
 		ww = bufio.NewWriterSize(zw, bufferSize)
 	}
 
+	var e Encoder
+	switch (f) {
+	case ENCODING_JSON:
+		e = json.NewEncoder(ww)
+	case ENCODING_GOB:
+		e = gob.NewEncoder(ww)
+	}
+
 	return &messageEncoder{
-		e:  gob.NewEncoder(ww),
+		e:  e,
 		bw: bw,
 		zw: zw,
 		ww: ww,
@@ -86,7 +110,7 @@ func newMessageEncoder(w io.Writer, bufferSize int, enableCompression bool, s *C
 }
 
 type messageDecoder struct {
-	d  *gob.Decoder
+	d  Decoder
 	zr io.ReadCloser
 }
 
@@ -101,7 +125,7 @@ func (d *messageDecoder) Decode(msg interface{}) error {
 	return d.d.Decode(msg)
 }
 
-func newMessageDecoder(r io.Reader, bufferSize int, enableCompression bool, s *ConnStats) *messageDecoder {
+func newMessageDecoder(r io.Reader, bufferSize int, enableCompression bool, s *ConnStats, f EncodingFormat) *messageDecoder {
 	r = newReaderCounter(r, s)
 	br := bufio.NewReaderSize(r, bufferSize)
 
@@ -112,8 +136,16 @@ func newMessageDecoder(r io.Reader, bufferSize int, enableCompression bool, s *C
 		rr = bufio.NewReaderSize(zr, bufferSize)
 	}
 
+	var d Decoder
+	switch (f) {
+	case ENCODING_JSON:
+		d = json.NewDecoder(rr)
+	case ENCODING_GOB:
+		d = gob.NewDecoder(rr)
+	}
+
 	return &messageDecoder{
-		d:  gob.NewDecoder(rr),
+		d:  d,
 		zr: zr,
 	}
 }

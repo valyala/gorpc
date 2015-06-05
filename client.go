@@ -98,6 +98,9 @@ type Client struct {
 	// any time you wish.
 	Stats ConnStats
 
+	// Format to use when encoding and decoding messages.
+	Format EncodingFormat
+
 	requestsChan chan *AsyncResult
 
 	clientStopChan chan struct{}
@@ -586,7 +589,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*AsyncResul
 	var err error
 	defer func() { done <- err }()
 
-	e := newMessageEncoder(w, c.SendBufferSize, !c.DisableCompression, &c.Stats)
+	e := newMessageEncoder(w, c.SendBufferSize, !c.DisableCompression, &c.Stats, c.Format)
 	defer e.Close()
 
 	t := time.NewTimer(c.FlushDelay)
@@ -654,7 +657,7 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*AsyncResul
 		done <- err
 	}()
 
-	d := newMessageDecoder(r, c.RecvBufferSize, !c.DisableCompression, &c.Stats)
+	d := newMessageDecoder(r, c.RecvBufferSize, !c.DisableCompression, &c.Stats, c.Format)
 	defer d.Close()
 
 	var wr wireResponse
