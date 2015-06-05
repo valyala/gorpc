@@ -26,9 +26,29 @@ packets and the amount of network bandwidth) required for RPC processing under
 high load.
 
 
-Gorpc also provides easy to use API on the top of Dispatcher. The API allows
-easily converting usual functions and/or struct methods into RPC versions
-on both client and server sides.
+Gorpc additionally provides the following features missing
+in [net/rpc](http://golang.org/pkg/net/rpc/):
+
+* Client automatically manages connections and automatically reconnects
+  to the server on connection errors.
+* Client supports response timeouts out of the box.
+* Client supports RPC batching out of the box.
+* Client detects stuck servers and immediately returns error to the caller.
+* Both Client and Server provide network stats and RPC stats out of the box.
+* Commonly used RPC transports such as TCP, TLS and unix socket are available
+  out of the box.
+* RPC transport compression is provided out of the box.
+* Server provides graceful shutdown out of the box.
+* Server supports RPC handlers' councurrenty throttling out of the box.
+* Server passes client address to RPC handlers.
+* Server gracefully handles panic in RPC handlers.
+* Dispatcher accepts functions as RPC handlers.
+* Dispatcher supports registering multiple receiver objects of the same type
+  under distinct names.
+
+
+Dispatcher API provided by gorpc allows easily converting usual functions
+and/or struct methods into RPC versions on both client and server sides.
 See [Dispatcher examples](http://godoc.org/github.com/valyala/gorpc#Dispatcher)
 for more details.
 
