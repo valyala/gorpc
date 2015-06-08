@@ -86,6 +86,9 @@ s := &gorpc.Server{
 		log.Printf("Obtained request %+v from the client %s\n", request, clientAddr)
 		return request
 	},
+
+	// Sets the message format. Can be GOB or JSON.
+	Format: ENCODING_GOB,
 }
 if err := s.Serve(); err != nil {
 	log.Fatalf("Cannot start rpc server: %s", err)
@@ -97,6 +100,7 @@ Client:
 c := &gorpc.Client{
 	// TCP address of the server.
 	Addr: "rpc.server.addr:12345",
+	Format: ENCODING_GOB,
 }
 c.Start()
 

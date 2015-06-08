@@ -104,6 +104,9 @@ type Server struct {
 	// any time you wish.
 	Stats ConnStats
 
+	// Format to use when encoding and decoding messages.
+	Format EncodingFormat
+
 	serverStopChan chan struct{}
 	stopWg         sync.WaitGroup
 }
@@ -300,7 +303,7 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 		close(done)
 	}()
 
-	d := newMessageDecoder(r, s.RecvBufferSize, enabledCompression, &s.Stats)
+	d := newMessageDecoder(r, s.RecvBufferSize, enabledCompression, &s.Stats, s.Format)
 	defer d.Close()
 
 	var wr wireRequest
@@ -383,7 +386,7 @@ func callHandlerWithRecover(logErrorFunc LoggerFunc, handler HandlerFunc, client
 func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-chan *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
 	defer func() { close(done) }()
 
-	e := newMessageEncoder(w, s.SendBufferSize, enabledCompression, &s.Stats)
+	e := newMessageEncoder(w, s.SendBufferSize, enabledCompression, &s.Stats, s.Format)
 	defer e.Close()
 
 	var flushChan <-chan time.Time
