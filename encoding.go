@@ -2,9 +2,10 @@ package gorpc
 
 import (
 	"bufio"
-	"compress/flate"
 	"encoding/gob"
 	"io"
+
+	"github.com/golang/snappy/snappy"
 )
 
 // RegisterType registers the given type to send via rpc.
@@ -35,23 +36,17 @@ type wireResponse struct {
 type messageEncoder struct {
 	e  *gob.Encoder
 	bw *bufio.Writer
-	zw *flate.Writer
+	zw *snappy.Writer
 	ww *bufio.Writer
 }
 
 func (e *messageEncoder) Close() error {
-	if e.zw != nil {
-		return e.zw.Close()
-	}
 	return nil
 }
 
 func (e *messageEncoder) Flush() error {
 	if e.zw != nil {
 		if err := e.ww.Flush(); err != nil {
-			return err
-		}
-		if err := e.zw.Flush(); err != nil {
 			return err
 		}
 	}
@@ -70,9 +65,9 @@ func newMessageEncoder(w io.Writer, bufferSize int, enableCompression bool, s *C
 	bw := bufio.NewWriterSize(w, bufferSize)
 
 	ww := bw
-	var zw *flate.Writer
+	var zw *snappy.Writer
 	if enableCompression {
-		zw, _ = flate.NewWriter(bw, flate.BestSpeed)
+		zw = snappy.NewWriter(bw)
 		ww = bufio.NewWriterSize(zw, bufferSize)
 	}
 
@@ -86,13 +81,10 @@ func newMessageEncoder(w io.Writer, bufferSize int, enableCompression bool, s *C
 
 type messageDecoder struct {
 	d  *gob.Decoder
-	zr io.ReadCloser
+	zr io.Reader
 }
 
 func (d *messageDecoder) Close() error {
-	if d.zr != nil {
-		return d.zr.Close()
-	}
 	return nil
 }
 
@@ -105,9 +97,9 @@ func newMessageDecoder(r io.Reader, bufferSize int, enableCompression bool, s *C
 	br := bufio.NewReaderSize(r, bufferSize)
 
 	rr := br
-	var zr io.ReadCloser
+	var zr io.Reader
 	if enableCompression {
-		zr = flate.NewReader(br)
+		zr = snappy.NewReader(br)
 		rr = bufio.NewReaderSize(zr, bufferSize)
 	}
 
