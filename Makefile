@@ -4,6 +4,12 @@ test:
 	GOMAXPROCS=4 go test
 	GOMAXPROCS=8 go test
 
+test-386:
+	GOARCH=386 GOMAXPROCS=1 go test
+	GOARCH=386 GOMAXPROCS=2 go test
+	GOARCH=386 GOMAXPROCS=4 go test
+	GOARCH=386 GOMAXPROCS=8 go test
+
 bench-1-goprocs:
 	GOMAXPROCS=1 go test -test.bench=".*"
 

@@ -358,11 +358,11 @@ func TestServerStuck(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			res[i+100*j], err = c.CallAsync("abc")
 			if err != nil {
-				t.Fatalf("Unexpected error in CallAsync: [%s]", err)
+				t.Fatalf("%d. Unexpected error in CallAsync: [%s]", j*100+i, err)
 			}
 		}
 		// This should prevent from overflow errors.
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 
 	stuckErrors := 0

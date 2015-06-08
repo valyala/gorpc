@@ -6,7 +6,7 @@
 package gorpc
 
 import (
-	"sync/atomic"
+	"sync"
 )
 
 // Snapshot returns connection statistics' snapshot.
@@ -18,7 +18,26 @@ func (cs *ConnStats) Snapshot() *ConnStats {
 	snapshot := *cs
 	cs.lock.Unlock()
 
-	return snapshot
+	snapshot.lock = sync.Mutex{}
+	return &snapshot
+}
+
+// Reset resets all the stats counters.
+func (cs *ConnStats) Reset() {
+	cs.lock.Lock()
+	cs.RPCCalls = 0
+	cs.RPCTime = 0
+	cs.BytesWritten = 0
+	cs.BytesRead = 0
+	cs.WriteCalls = 0
+	cs.WriteErrors = 0
+	cs.ReadCalls = 0
+	cs.ReadErrors = 0
+	cs.DialCalls = 0
+	cs.DialErrors = 0
+	cs.AcceptCalls = 0
+	cs.AcceptErrors = 0
+	cs.lock.Unlock()
 }
 
 func (cs *ConnStats) incRPCCalls() {
@@ -27,7 +46,7 @@ func (cs *ConnStats) incRPCCalls() {
 	cs.lock.Unlock()
 }
 
-func (cs *ConnStats) incRPCTime(dt int) {
+func (cs *ConnStats) incRPCTime(dt uint64) {
 	cs.lock.Lock()
 	cs.RPCTime += dt
 	cs.lock.Unlock()

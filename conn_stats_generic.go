@@ -27,6 +27,22 @@ func (cs *ConnStats) Snapshot() *ConnStats {
 	}
 }
 
+// Reset resets all the stats counters.
+func (cs *ConnStats) Reset() {
+	atomic.StoreUint64(&cs.RPCCalls, 0)
+	atomic.StoreUint64(&cs.RPCTime, 0)
+	atomic.StoreUint64(&cs.BytesWritten, 0)
+	atomic.StoreUint64(&cs.BytesRead, 0)
+	atomic.StoreUint64(&cs.WriteCalls, 0)
+	atomic.StoreUint64(&cs.WriteErrors, 0)
+	atomic.StoreUint64(&cs.ReadCalls, 0)
+	atomic.StoreUint64(&cs.ReadErrors, 0)
+	atomic.StoreUint64(&cs.DialCalls, 0)
+	atomic.StoreUint64(&cs.DialErrors, 0)
+	atomic.StoreUint64(&cs.AcceptCalls, 0)
+	atomic.StoreUint64(&cs.AcceptErrors, 0)
+}
+
 func (cs *ConnStats) incRPCCalls() {
 	atomic.AddUint64(&cs.RPCCalls, 1)
 }
