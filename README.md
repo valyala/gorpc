@@ -100,32 +100,12 @@ c := &gorpc.Client{
 }
 c.Start()
 
-// RPC call
 resp, err := c.Call("foobar")
 if err != nil {
 	log.Fatalf("Error when sending request to server: %s", err)
 }
 if resp.(string) != "foobar" {
 	log.Fatalf("Unexpected response from the server: %+v", resp)
-}
-
-// Non-blocking 'fire and forget' calls
-for i := 0; i < 10; i++ {
-	c.Send(i)
-}
-
-// Async call. Fire 10 simultaneous calls, then wait for results.
-var results [10]gorpc.AsyncResult
-for i := 0; i < 10; i++ {
-	results[i] = c.CallAsync(i)
-}
-for i := 0; i < 10; i++ {
-	r := results[i]
-	<-r.Done
-	if r.Error != nil {
-		log.Fatalf("Error on request %d: [%s]", i, r.Error)
-	}
-	log.Printf("Response %d=%v\n", i, r.Response)
 }
 ```
 
