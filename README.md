@@ -34,17 +34,22 @@ in [net/rpc](http://golang.org/pkg/net/rpc/):
 * Client supports response timeouts out of the box.
 * Client supports RPC batching out of the box.
 * Client detects stuck servers and immediately returns error to the caller.
+* Client supports fast message passing to the Server, i.e. requests
+  without responses.
 * Both Client and Server provide network stats and RPC stats out of the box.
 * Commonly used RPC transports such as TCP, TLS and unix socket are available
   out of the box.
 * RPC transport compression is provided out of the box.
 * Server provides graceful shutdown out of the box.
-* Server supports RPC handlers' councurrenty throttling out of the box.
-* Server passes client address to RPC handlers.
+* Server supports RPC handlers' councurrency throttling out of the box.
+* Server may pass client address to RPC handlers.
 * Server gracefully handles panic in RPC handlers.
 * Dispatcher accepts functions as RPC handlers.
 * Dispatcher supports registering multiple receiver objects of the same type
   under distinct names.
+* Dispatcher supports RPC handlers with zero, one (request) or two (client
+  address and request) arguments and zero, one (either response or error)
+  or two (response, error) return values.
 
 
 Dispatcher API provided by gorpc allows easily converting usual functions
