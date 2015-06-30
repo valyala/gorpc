@@ -66,14 +66,10 @@ func ExampleDispatcher_serviceCalls() {
 	res, err = dc.Call("GetError42", nil)
 	fmt.Printf("GetError42=%+v, %+v\n", res, err)
 
-	res, err = dc.Call("privateFunc", "123")
-	fmt.Printf("privateFunc=%+v, %+v, %+v\n", res, err, service.state)
-
 	// Output:
 	// Get=123, <nil>
 	// Get=456, <nil>
 	// Set=<nil>, <nil>, 78
 	// GetError42=78, <nil>
 	// GetError42=<nil>, error42
-	// privateFunc=<nil>, gorpc.Dispatcher: unknown method [MyService.privateFunc], 42
 }

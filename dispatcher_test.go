@@ -6,6 +6,7 @@ import (
 	"io"
 	"sync/atomic"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -291,13 +292,14 @@ func TestDispatcherUnknownFuncCall(t *testing.T) {
 	d := NewDispatcher()
 	d.AddFunc("foo", func(request string) {})
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
-		res, err := dc.Call("UnknownFunc", 1234)
-		if err == nil {
-			t.Fatalf("Expected non-nil error")
-		}
-		if res != nil {
-			t.Fatalf("Expected nil response")
-		}
+		testPanic(t, func() { dc.Call("UnknownFunc", 1234) })
+		testPanic(t, func() { dc.CallTimeout("foobar", 1234, time.Second) })
+		testPanic(t, func() { dc.CallAsync("UnknownFunc", "foobar") })
+		testPanic(t, func() { dc.Send("FoobarFunc", "aaa") })
+
+		b := dc.NewBatch()
+		testPanic(t, func() { b.Add("UnknownFunc", 123) })
+		testPanic(t, func() { b.AddSkipResponse("Aaaa", nil) })
 	})
 }
 
@@ -752,9 +754,9 @@ func TestDispatcherSendWrongFunc(t *testing.T) {
 	N := 10
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		for i := 0; i < N; i++ {
-			if err := dc.Send("Bar", i); err != nil {
-				t.Fatalf("Unexpected error in Send(): [%s]", err)
-			}
+			testPanic(t, func() {
+				dc.Send("Bar", i)
+			})
 		}
 		if err := dc.Send("Foo", 10); err != nil {
 			t.Fatalf("Unexpected error in Send(): [%s]", err)
@@ -857,19 +859,17 @@ func TestDispatcherServiceUnknownService(t *testing.T) {
 }
 
 func TestDispatcherServiceUnknownMethodCall(t *testing.T) {
-	service := &testService{}
-
 	d := NewDispatcher()
-	d.AddService("qwerty", service)
-
+	d.AddService("qwerty", &testService{})
 	testDispatcherService(t, d, "qwerty", func(dc *DispatcherClient) {
-		res, err := dc.Call("unknownMethod", 123)
-		if err == nil {
-			t.Fatalf("Error expected")
-		}
-		if res != nil {
-			t.Fatalf("Unexpected response: [%+v]. Expected nil", res)
-		}
+		testPanic(t, func() { dc.Call("UnknownFunc", 1234) })
+		testPanic(t, func() { dc.CallTimeout("foobar", 1234, time.Second) })
+		testPanic(t, func() { dc.CallAsync("UnknownFunc", "foobar") })
+		testPanic(t, func() { dc.Send("FoobarFunc", "aaa") })
+
+		b := dc.NewBatch()
+		testPanic(t, func() { b.Add("UnknownFunc", 123) })
+		testPanic(t, func() { b.AddSkipResponse("Aaaa", nil) })
 	})
 }
 
@@ -880,13 +880,7 @@ func TestDispatcherServicePrivateMethodCall(t *testing.T) {
 	d.AddService("qwerty", service)
 
 	testDispatcherService(t, d, "qwerty", func(dc *DispatcherClient) {
-		res, err := dc.Call("privateFunc", nil)
-		if err == nil {
-			t.Fatalf("Error expected")
-		}
-		if res != nil {
-			t.Fatalf("Unexpected response: [%+v]. Expected nil", res)
-		}
+		testPanic(t, func() { dc.Call("privateFunc", nil) })
 	})
 }
 

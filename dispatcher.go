@@ -412,6 +412,7 @@ func getErrorString(v reflect.Value) string {
 type DispatcherClient struct {
 	c           *Client
 	serviceName string
+	funcNames   map[string]struct{}
 }
 
 // NewFuncClient returns a client suitable for calling functions registered
@@ -422,7 +423,8 @@ func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
 	}
 
 	return &DispatcherClient{
-		c: c,
+		c:         c,
+		funcNames: getFuncNames(d.serviceMap[""]),
 	}
 }
 
@@ -438,7 +440,16 @@ func (d *Dispatcher) NewServiceClient(serviceName string, c *Client) *Dispatcher
 	return &DispatcherClient{
 		c:           c,
 		serviceName: serviceName,
+		funcNames:   getFuncNames(d.serviceMap[serviceName]),
 	}
+}
+
+func getFuncNames(sd *serviceData) map[string]struct{} {
+	funcNames := make(map[string]struct{})
+	for k, _ := range sd.funcMap {
+		funcNames[k] = struct{}{}
+	}
+	return funcNames
 }
 
 // Call calls the given function.
@@ -593,10 +604,21 @@ func (b *DispatcherBatch) CallTimeout(timeout time.Duration) error {
 }
 
 func (dc *DispatcherClient) getRequest(funcName string, request interface{}) *dispatcherRequest {
+	if _, ok := dc.funcNames[funcName]; !ok {
+		logPanic("gorpc.DispatcherClient: unknown funcName: [%s]. Available funcNames: %v", funcName, getSetKeys(dc.funcNames))
+	}
 	return &dispatcherRequest{
 		Name:    dc.serviceName + "." + funcName,
 		Request: request,
 	}
+}
+
+func getSetKeys(m map[string]struct{}) []string {
+	var keys []string
+	for k, _ := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func getResponse(respv interface{}, err error) (interface{}, error) {
