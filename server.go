@@ -12,8 +12,8 @@ import (
 //
 // clientAddr contains client address returned by Listener.Accept().
 // Request and response types may be arbitrary.
-// All the request types the client may send to the server must be registered
-// with gorpc.RegisterType() before starting the server.
+// All the request and response types the HandlerFunc may use must be registered
+// with RegisterType() before starting the server.
 // There is no need in registering base Go types such as int, string, bool,
 // float64, etc. or arrays, slices and maps containing base Go types.
 //
@@ -110,8 +110,8 @@ type Server struct {
 
 // Start starts rpc server.
 //
-// All the request types the client may send to the server must be registered
-// with gorpc.RegisterType() before starting the server.
+// All the request and response types the Handler may use must be registered
+// with RegisterType() before starting the server.
 // There is no need in registering base Go types such as int, string, bool,
 // float64, etc. or arrays, slices and maps containing base Go types.
 func (s *Server) Start() error {

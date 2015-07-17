@@ -111,8 +111,8 @@ type Client struct {
 
 // Start starts rpc client. Establishes connection to the server on Client.Addr.
 //
-// All the response types the server may return must be registered
-// via gorpc.RegisterType() before starting the client.
+// All the request and response types the client may use must be registered
+// via RegisterType() before starting the client.
 // There is no need in registering base Go types such as int, string, bool,
 // float64, etc. or arrays, slices and maps containing base Go types.
 func (c *Client) Start() {
@@ -171,8 +171,8 @@ func (c *Client) Stop() {
 // Client.RequestTimeout or server connection problems occur.
 // The returned error can be casted to ClientError.
 //
-// Request and response types may be arbitrary. All the response types
-// the server may return must be registered via gorpc.RegisterType() before
+// Request and response types may be arbitrary. All the request and response
+// types the client may use must be registered via RegisterType() before
 // starting the client.
 // There is no need in registering base Go types such as int, string, bool,
 // float64, etc. or arrays, slices and maps containing base Go types.
@@ -190,8 +190,8 @@ func (c *Client) Call(request interface{}) (response interface{}, err error) {
 // the given timeout or server connection problems occur.
 // The returned error can be casted to ClientError.
 //
-// Request and response types may be arbitrary. All the response types
-// the server may return must be registered via gorpc.RegisterType() before
+// Request and response types may be arbitrary. All the request and response
+// types the client may use must be registered via RegisterType() before
 // starting the client.
 // There is no need in registering base Go types such as int, string, bool,
 // float64, etc. or arrays, slices and maps containing base Go types.
