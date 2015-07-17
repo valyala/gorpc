@@ -12,9 +12,9 @@ import (
 // Dispatcher helps constructing HandlerFunc for dispatching across multiple
 // functions and/or services.
 //
-// Dispatcher also automatically registers all request and response types
+// Dispatcher automatically registers all the request and response types
 // for all functions and/or methods registered via AddFunc() and AddService(),
-// so there is no need in calling RegisterType() for them.
+// so there is no need in calling RegisterType() for these types.
 //
 // See examples for details.
 type Dispatcher struct {
