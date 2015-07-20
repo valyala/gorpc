@@ -283,7 +283,7 @@ func TestDispatcherInvalidArgType(t *testing.T) {
 			t.Fatalf("Expected non-nil error")
 		}
 		if res != nil {
-			t.Fatalf("Expected nil response")
+			t.Fatalf("Expected nil response. Got %+v", res)
 		}
 	})
 }
@@ -291,16 +291,54 @@ func TestDispatcherInvalidArgType(t *testing.T) {
 func TestDispatcherUnknownFuncCall(t *testing.T) {
 	d := NewDispatcher()
 	d.AddFunc("foo", func(request string) {})
-	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
-		testPanic(t, func() { dc.Call("UnknownFunc", 1234) })
-		testPanic(t, func() { dc.CallTimeout("foobar", 1234, time.Second) })
-		testPanic(t, func() { dc.CallAsync("UnknownFunc", "foobar") })
-		testPanic(t, func() { dc.Send("FoobarFunc", "aaa") })
+	testDispatcherFunc(t, d, func(dc *DispatcherClient) { testUnknownFuncs(t, dc) })
+}
 
-		b := dc.NewBatch()
-		testPanic(t, func() { b.Add("UnknownFunc", 123) })
-		testPanic(t, func() { b.AddSkipResponse("Aaaa", nil) })
-	})
+func testUnknownFuncs(t *testing.T, dc *DispatcherClient) {
+	res, err := dc.Call("UnknownFunc", 1234)
+	if err == nil {
+		t.Fatalf("Expected non-nil error")
+	}
+	if res != nil {
+		t.Fatalf("Expected nil response. Got %+v", res)
+	}
+
+	res, err = dc.CallTimeout("foobar", 1234, time.Second)
+	if err == nil {
+		t.Fatalf("Expected non-nil error")
+	}
+	if res != nil {
+		t.Fatalf("Expected nil response. Got %+v", res)
+	}
+
+	ar, err := dc.CallAsync("UnknownFunc", "foobar")
+	if err != nil {
+		t.Fatalf("Unexpected error: [%s]", err)
+	}
+	<-ar.Done
+	if ar.Error == nil {
+		t.Fatalf("Unexpected non-nil error")
+	}
+	if ar.Response != nil {
+		t.Fatalf("Expected nil response. Got %+v", ar.Response)
+	}
+
+	if err = dc.Send("FoobarFunc", "aaa"); err != nil {
+		t.Fatalf("Unepxected error: [%s]", err)
+	}
+
+	b := dc.NewBatch()
+	br := b.Add("UnknownFunc", 123)
+	b.AddSkipResponse("Aaaa", nil)
+	if err = b.Call(); err != nil {
+		t.Fatalf("Unexpected error: [%s]", err)
+	}
+	if br.Error == nil {
+		t.Fatalf("Unexpected non-nil error")
+	}
+	if br.Response != nil {
+		t.Fatalf("Expected nil response. Got %+v", br.Response)
+	}
 }
 
 func TestDispatcherEchoFuncCall(t *testing.T) {
@@ -754,12 +792,12 @@ func TestDispatcherSendWrongFunc(t *testing.T) {
 	N := 10
 	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
 		for i := 0; i < N; i++ {
-			testPanic(t, func() {
-				dc.Send("Bar", i)
-			})
+			if err := dc.Send("BarUnknown", i); err != nil {
+				t.Fatalf("Unexpected error: [%s]", err)
+			}
 		}
 		if err := dc.Send("Foo", 10); err != nil {
-			t.Fatalf("Unexpected error in Send(): [%s]", err)
+			t.Fatalf("Unexpected error: [%s]", err)
 		}
 		<-ch
 	})
@@ -861,16 +899,7 @@ func TestDispatcherServiceUnknownService(t *testing.T) {
 func TestDispatcherServiceUnknownMethodCall(t *testing.T) {
 	d := NewDispatcher()
 	d.AddService("qwerty", &testService{})
-	testDispatcherService(t, d, "qwerty", func(dc *DispatcherClient) {
-		testPanic(t, func() { dc.Call("UnknownFunc", 1234) })
-		testPanic(t, func() { dc.CallTimeout("foobar", 1234, time.Second) })
-		testPanic(t, func() { dc.CallAsync("UnknownFunc", "foobar") })
-		testPanic(t, func() { dc.Send("FoobarFunc", "aaa") })
-
-		b := dc.NewBatch()
-		testPanic(t, func() { b.Add("UnknownFunc", 123) })
-		testPanic(t, func() { b.AddSkipResponse("Aaaa", nil) })
-	})
+	testDispatcherService(t, d, "qwerty", func(dc *DispatcherClient) { testUnknownFuncs(t, dc) })
 }
 
 func TestDispatcherServicePrivateMethodCall(t *testing.T) {
@@ -880,7 +909,13 @@ func TestDispatcherServicePrivateMethodCall(t *testing.T) {
 	d.AddService("qwerty", service)
 
 	testDispatcherService(t, d, "qwerty", func(dc *DispatcherClient) {
-		testPanic(t, func() { dc.Call("privateFunc", nil) })
+		res, err := dc.Call("privateFunc", nil)
+		if err == nil {
+			t.Fatalf("Error expected")
+		}
+		if res != nil {
+			t.Fatalf("Expected nil response. Got %+v", res)
+		}
 	})
 }
 

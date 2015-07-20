@@ -238,6 +238,11 @@ func getClientTimeoutError(c *Client, timeout time.Duration) error {
 // The server may return arbitrary response on Send() request, but the response
 // is totally ignored.
 //
+// All the request types the client may use must be registered
+// via RegisterType() before starting the client.
+// There is no need in registering base Go types such as int, string, bool,
+// float64, etc. or arrays, slices and maps containing base Go types.
+//
 // Don't forget starting the client with Client.Start() before calling Client.Send().
 func (c *Client) Send(request interface{}) error {
 	_, err := c.callAsync(request, true)
@@ -276,6 +281,12 @@ type AsyncResult struct {
 //     case <-r.Done:
 //        processResponse(r.Response, r.Error)
 //     }
+//
+// Request and response types may be arbitrary. All the request and response
+// types the client may use must be registered via RegisterType() before
+// starting the client.
+// There is no need in registering base Go types such as int, string, bool,
+// float64, etc. or arrays, slices and maps containing base Go types.
 //
 // Don't forget starting the client with Client.Start() before
 // calling Client.CallAsync().
@@ -353,6 +364,12 @@ func (c *Client) NewBatch() *Batch {
 // All the requests added to the batch are sent to the server at once
 // when Batch.Call*() is called.
 //
+// Request and response types may be arbitrary. All the request and response
+// types the client may use must be registered via RegisterType() before
+// starting the client.
+// There is no need in registering base Go types such as int, string, bool,
+// float64, etc. or arrays, slices and maps containing base Go types.
+//
 // It is safe adding multiple requests to the same batch from concurrently
 // running goroutines.
 func (b *Batch) Add(request interface{}) *BatchResult {
@@ -366,6 +383,11 @@ func (b *Batch) Add(request interface{}) *BatchResult {
 //
 // All the requests added to the batch are sent to the server at once
 // when Batch.Call*() is called.
+//
+// All the request types the client may use must be registered
+// via RegisterType() before starting the client.
+// There is no need in registering base Go types such as int, string, bool,
+// float64, etc. or arrays, slices and maps containing base Go types.
 //
 // It is safe adding multiple requests to the same batch from concurrently
 // running goroutines.

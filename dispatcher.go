@@ -14,7 +14,9 @@ import (
 //
 // Dispatcher automatically registers all the request and response types
 // for all functions and/or methods registered via AddFunc() and AddService(),
-// so there is no need in calling RegisterType() for these types.
+// so there is no need in calling RegisterType() for these types on server side.
+// Client-side code must call RegisterType() for non-internal request
+// and response types before issuing RPCs via DispatcherClient.
 //
 // See examples for details.
 type Dispatcher struct {
@@ -412,7 +414,6 @@ func getErrorString(v reflect.Value) string {
 type DispatcherClient struct {
 	c           *Client
 	serviceName string
-	funcNames   map[string]struct{}
 }
 
 // NewFuncClient returns a client suitable for calling functions registered
@@ -423,8 +424,7 @@ func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
 	}
 
 	return &DispatcherClient{
-		c:         c,
-		funcNames: getFuncNames(d.serviceMap[""]),
+		c: c,
 	}
 }
 
@@ -440,24 +440,21 @@ func (d *Dispatcher) NewServiceClient(serviceName string, c *Client) *Dispatcher
 	return &DispatcherClient{
 		c:           c,
 		serviceName: serviceName,
-		funcNames:   getFuncNames(d.serviceMap[serviceName]),
 	}
 }
 
-func getFuncNames(sd *serviceData) map[string]struct{} {
-	funcNames := make(map[string]struct{})
-	for k, _ := range sd.funcMap {
-		funcNames[k] = struct{}{}
-	}
-	return funcNames
-}
-
-// Call calls the given function.
+// Call calls the given function with the given request.
+//
+// All the non-internal request and response types must be registered
+// via RegisterType() before the first call to this function.
 func (dc *DispatcherClient) Call(funcName string, request interface{}) (response interface{}, err error) {
 	return dc.CallTimeout(funcName, request, dc.c.RequestTimeout)
 }
 
 // CallTimeout calls the given function and waits for response during the given timeout.
+//
+// All the non-internal request and response types must be registered
+// via RegisterType() before the first call to this function.
 func (dc *DispatcherClient) CallTimeout(funcName string, request interface{}, timeout time.Duration) (response interface{}, err error) {
 	req := dc.getRequest(funcName, request)
 	resp, err := dc.c.CallTimeout(req, timeout)
@@ -466,12 +463,18 @@ func (dc *DispatcherClient) CallTimeout(funcName string, request interface{}, ti
 
 // Send sends the given request to the given function and doesn't
 // wait for response.
+//
+// All the non-internal request types must be registered via RegisterType()
+// before the first call to this function.
 func (dc *DispatcherClient) Send(funcName string, request interface{}) error {
 	req := dc.getRequest(funcName, request)
 	return dc.c.Send(req)
 }
 
 // CallAsync calls the given function asynchronously.
+//
+// All the non-internal request and response types must be registered
+// via RegisterType() before the first call to this function.
 func (dc *DispatcherClient) CallAsync(funcName string, request interface{}) (*AsyncResult, error) {
 	req := dc.getRequest(funcName, request)
 
@@ -521,6 +524,9 @@ func (dc *DispatcherClient) NewBatch() *DispatcherBatch {
 // All the requests added to the batch are sent to the server at once
 // when DispatcherBatch.Call*() is called.
 //
+// All the non-internal request and response types must be registered
+// via RegisterType() before the first call to this function.
+//
 // It is safe adding multiple requests to the same batch from concurrently
 // running goroutines.
 func (b *DispatcherBatch) Add(funcName string, request interface{}) *BatchResult {
@@ -534,6 +540,9 @@ func (b *DispatcherBatch) Add(funcName string, request interface{}) *BatchResult
 //
 // All the requests added to the batch are sent to the server at once
 // when DispatcherBatch.Call*() is called.
+//
+// All the non-internal request types must be registered via RegisterType()
+// before the first call to this function.
 //
 // It is safe adding multiple requests to the same batch from concurrently
 // running goroutines.
@@ -604,21 +613,10 @@ func (b *DispatcherBatch) CallTimeout(timeout time.Duration) error {
 }
 
 func (dc *DispatcherClient) getRequest(funcName string, request interface{}) *dispatcherRequest {
-	if _, ok := dc.funcNames[funcName]; !ok {
-		logPanic("gorpc.DispatcherClient: unknown funcName: [%s]. Available funcNames: %v", funcName, getSetKeys(dc.funcNames))
-	}
 	return &dispatcherRequest{
 		Name:    dc.serviceName + "." + funcName,
 		Request: request,
 	}
-}
-
-func getSetKeys(m map[string]struct{}) []string {
-	var keys []string
-	for k, _ := range m {
-		keys = append(keys, k)
-	}
-	return keys
 }
 
 func getResponse(respv interface{}, err error) (interface{}, error) {
