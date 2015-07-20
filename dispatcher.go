@@ -573,6 +573,7 @@ func (b *DispatcherBatch) add(funcName string, request interface{}, skipResponse
 // Call calls all the RPCs added via DispatcherBatch.Add().
 //
 // The order of batched RPCs execution on the server is unspecified.
+// Usually batched RPCs are executed concurrently on the server.
 //
 // The caller may read all BatchResult contents returned
 // from DispatcherBatch.Add() after the Call returns.
@@ -585,6 +586,9 @@ func (b *DispatcherBatch) Call() error {
 
 // CallTimeout calls all the RPCs added via DispatcherBatch.Add() and waits
 // for all the RPC responses during the given timeout.
+//
+// The order of batched RPCs execution on the server is unspecified.
+// Usually batched RPCs are executed concurrently on the server.
 //
 // The caller may read all BatchResult contents returned
 // from DispatcherBatch.Add() after the CallTimeout returns.

@@ -414,6 +414,7 @@ func (b *Batch) add(request interface{}, skipResponse bool) *BatchResult {
 // Call calls all the RPCs added via Batch.Add().
 //
 // The order of batched RPCs execution on the server is unspecified.
+// Usually batched RPCs are executed concurrently on the server.
 //
 // The caller may read all BatchResult contents returned from Batch.Add()
 // after the Call returns.
@@ -426,6 +427,9 @@ func (b *Batch) Call() error {
 
 // CallTimeout calls all the RPCs added via Batch.Add() and waits for
 // all the RPC responses during the given timeout.
+//
+// The order of batched RPCs execution on the server is unspecified.
+// Usually batched RPCs are executed concurrently on the server.
 //
 // The caller may read all BatchResult contents returned from Batch.Add()
 // after the CallTimeout returns.
