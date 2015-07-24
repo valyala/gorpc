@@ -1,7 +1,7 @@
 gorpc
 =====
 
-Simple, fast and scalable golang RPC library for high load.
+Simple, fast and scalable golang RPC library for high load and microservices.
 
 
 Gorpc provides the following features useful for highly loaded projects
