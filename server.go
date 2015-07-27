@@ -189,7 +189,6 @@ func serverHandler(s *Server, workersCh chan struct{}) {
 		go func() {
 			if conn, clientAddr, err = s.Listener.Accept(); err != nil {
 				s.LogError("gorpc.Server: [%s]. Cannot accept new connection: [%s]", s.Addr, err)
-				time.Sleep(time.Second)
 			}
 			close(acceptChan)
 		}()
@@ -204,6 +203,11 @@ func serverHandler(s *Server, workersCh chan struct{}) {
 
 		if err != nil {
 			s.Stats.incAcceptErrors()
+			select {
+			case <-s.serverStopChan:
+				return
+			case <-time.After(time.Second):
+			}
 			continue
 		}
 

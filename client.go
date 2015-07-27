@@ -535,7 +535,6 @@ func clientHandler(c *Client) {
 		go func() {
 			if conn, err = c.Dial(c.Addr); err != nil {
 				c.LogError("gorpc.Client: [%s]. Cannot establish rpc connection: [%s]", c.Addr, err)
-				time.Sleep(time.Second)
 			}
 			close(dialChan)
 		}()
@@ -549,6 +548,11 @@ func clientHandler(c *Client) {
 
 		if err != nil {
 			c.Stats.incDialErrors()
+			select {
+			case <-c.clientStopChan:
+				return
+			case <-time.After(time.Second):
+			}
 			continue
 		}
 		clientHandleConnection(c, conn)
