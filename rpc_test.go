@@ -1036,7 +1036,7 @@ func TestCompress(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
-		go func() {
+		go func(i int) {
 			defer wg.Done()
 			for j := 0; j < 50; j++ {
 				s := fmt.Sprintf("foo bar baz %d aaabbb", j)
@@ -1055,7 +1055,7 @@ func TestCompress(t *testing.T) {
 					t.Fatalf("Unexpected value: %d. Expected %d", resp, i+j)
 				}
 			}
-		}()
+		}(i)
 	}
 	wg.Wait()
 }
