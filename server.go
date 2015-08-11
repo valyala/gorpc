@@ -5,6 +5,7 @@ import (
 	"io"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -183,18 +184,22 @@ func serverHandler(s *Server, workersCh chan struct{}) {
 	var conn io.ReadWriteCloser
 	var clientAddr string
 	var err error
+	var closing atomic.Value
 
 	for {
 		acceptChan := make(chan struct{})
 		go func() {
 			if conn, clientAddr, err = s.Listener.Accept(); err != nil {
-				s.LogError("gorpc.Server: [%s]. Cannot accept new connection: [%s]", s.Addr, err)
+				if closing.Load() == nil {
+					s.LogError("gorpc.Server: [%s]. Cannot accept new connection: [%s]", s.Addr, err)
+				}
 			}
 			close(acceptChan)
 		}()
 
 		select {
 		case <-s.serverStopChan:
+			closing.Store(true)
 			s.Listener.Close()
 			return
 		case <-acceptChan:
@@ -310,8 +315,8 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 	var wr wireRequest
 	for {
 		if err := d.Decode(&wr); err != nil {
-			if err != io.ErrUnexpectedEOF {
-				s.LogError("gorpc.Server: [%s]->[%s]. Cannot decode request: [%#v]", clientAddr, s.Addr, err)
+			if err != io.ErrUnexpectedEOF && err != io.EOF {
+				s.LogError("gorpc.Server: [%s]->[%s]. Cannot decode request: [%s]", clientAddr, s.Addr, err)
 			}
 			return
 		}
