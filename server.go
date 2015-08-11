@@ -201,6 +201,7 @@ func serverHandler(s *Server, workersCh chan struct{}) {
 		case <-s.serverStopChan:
 			stopping.Store(true)
 			s.Listener.Close()
+			<-acceptChan
 			return
 		case <-acceptChan:
 			s.Stats.incAcceptCalls()
