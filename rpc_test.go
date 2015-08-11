@@ -635,19 +635,21 @@ func TestTLSTransport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot load TLS certificates: [%s]", err)
 	}
-	cfg := &tls.Config{
-		Certificates:       []tls.Certificate{cert},
+	serverCfg := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+	clientCfg := &tls.Config{
 		InsecureSkipVerify: true,
 	}
 
 	addr := getRandomAddr()
-	s := NewTLSServer(addr, echoHandler, cfg)
+	s := NewTLSServer(addr, echoHandler, serverCfg)
 	if err := s.Start(); err != nil {
 		t.Fatalf("Server.Start() failed: [%s]", err)
 	}
 	defer s.Stop()
 
-	c := NewTLSClient(addr, cfg)
+	c := NewTLSClient(addr, clientCfg)
 	c.Start()
 	defer c.Stop()
 
