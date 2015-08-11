@@ -310,7 +310,9 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 	var wr wireRequest
 	for {
 		if err := d.Decode(&wr); err != nil {
-			s.LogError("gorpc.Server: [%s]->[%s]. Cannot decode request: [%s]", clientAddr, s.Addr, err)
+			if err != io.ErrUnexpectedEOF {
+				s.LogError("gorpc.Server: [%s]->[%s]. Cannot decode request: [%#v]", clientAddr, s.Addr, err)
+			}
 			return
 		}
 
