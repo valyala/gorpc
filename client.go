@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -529,18 +530,23 @@ func clientHandler(c *Client) {
 
 	var conn io.ReadWriteCloser
 	var err error
+	var stopping atomic.Value
 
 	for {
 		dialChan := make(chan struct{})
 		go func() {
 			if conn, err = c.Dial(c.Addr); err != nil {
-				c.LogError("gorpc.Client: [%s]. Cannot establish rpc connection: [%s]", c.Addr, err)
+				if stopping.Load() == nil {
+					c.LogError("gorpc.Client: [%s]. Cannot establish rpc connection: [%s]", c.Addr, err)
+				}
 			}
 			close(dialChan)
 		}()
 
 		select {
 		case <-c.clientStopChan:
+			stopping.Store(true)
+			<-dialChan
 			return
 		case <-dialChan:
 			c.Stats.incDialCalls()
@@ -555,7 +561,14 @@ func clientHandler(c *Client) {
 			}
 			continue
 		}
+
 		clientHandleConnection(c, conn)
+
+		select {
+		case <-c.clientStopChan:
+			return
+		default:
+		}
 	}
 }
 
