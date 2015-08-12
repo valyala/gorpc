@@ -3,6 +3,7 @@ package gorpc
 import (
 	"fmt"
 	"io"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -653,6 +654,9 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*AsyncResul
 		select {
 		case m = <-c.requestsChan:
 		default:
+			// Give the last chance for ready goroutines filling c.requestsChan :)
+			runtime.Gosched()
+
 			select {
 			case <-stopChan:
 				return

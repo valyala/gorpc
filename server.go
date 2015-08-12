@@ -425,6 +425,9 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 		select {
 		case m = <-responsesChan:
 		default:
+			// Give the last chance for ready goroutines filling responsesChan :)
+			runtime.Gosched()
+
 			select {
 			case <-stopChan:
 				return
