@@ -11,27 +11,27 @@ import (
 	"time"
 )
 
-func BenchmarkSend1Worker(b *testing.B) {
-	benchmarkSend(b, 1)
+func BenchmarkSendNil1Worker(b *testing.B) {
+	benchSendNil(b, 1)
 }
 
-func BenchmarkSend10Workers(b *testing.B) {
-	benchmarkSend(b, 10)
+func BenchmarkSendNil10Workers(b *testing.B) {
+	benchSendNil(b, 10)
 }
 
-func BenchmarkSend100Workers(b *testing.B) {
-	benchmarkSend(b, 100)
+func BenchmarkSendNil100Workers(b *testing.B) {
+	benchSendNil(b, 100)
 }
 
-func BenchmarkSend1000Workers(b *testing.B) {
-	benchmarkSend(b, 1000)
+func BenchmarkSendNil1000Workers(b *testing.B) {
+	benchSendNil(b, 1000)
 }
 
-func BenchmarkSend10000Workers(b *testing.B) {
-	benchmarkSend(b, 10000)
+func BenchSendNil10000Workers(b *testing.B) {
+	benchSendNil(b, 10000)
 }
 
-func benchmarkSend(b *testing.B, workersCount int) {
+func benchSendNil(b *testing.B, workersCount int) {
 	var serverCalls uint64
 	N := uint64(b.N)
 	stopCh := make(chan struct{})
@@ -48,10 +48,11 @@ func benchmarkSend(b *testing.B, workersCount int) {
 	c := NewUnixClient(addr)
 	c.Conns = runtime.GOMAXPROCS(-1)
 	c.PendingRequests = 100000
+	c.DisableCompression = false
 
 	benchClientServerExt(b, workersCount, c, s, func(n int) {
 	start:
-		if err := c.Send(42); err != nil {
+		if err := c.Send(nil); err != nil {
 			if err.(*ClientError).Overflow {
 				time.Sleep(time.Millisecond)
 				goto start
@@ -209,6 +210,66 @@ func simulateRealApp(b *testing.B, workersCount int) {
 			b.Fatalf("Unexpected response value %v. Expected %v", x, req)
 		}
 	})
+}
+
+func BenchmarkEchoNil1Worker(b *testing.B) {
+	benchEchoNil(b, 1, false, false)
+}
+
+func BenchmarkEchoNil10Workers(b *testing.B) {
+	benchEchoNil(b, 10, false, false)
+}
+
+func BenchmarkEchoNil100Workers(b *testing.B) {
+	benchEchoNil(b, 100, false, false)
+}
+
+func BenchmarkEchoNil1000Workers(b *testing.B) {
+	benchEchoNil(b, 1000, false, false)
+}
+
+func BenchmarkEchoNil10000Workers(b *testing.B) {
+	benchEchoNil(b, 10000, false, false)
+}
+
+func BenchmarkEchoNilUnix1Worker(b *testing.B) {
+	benchEchoNil(b, 1, false, true)
+}
+
+func BenchmarkEchoNilUnix10Workers(b *testing.B) {
+	benchEchoNil(b, 10, false, true)
+}
+
+func BenchmarkEchoNilUnix100Workers(b *testing.B) {
+	benchEchoNil(b, 100, false, true)
+}
+
+func BenchmarkEchoNilUnix1000Workers(b *testing.B) {
+	benchEchoNil(b, 1000, false, true)
+}
+
+func BenchmarkEchoNilUnix10000Workers(b *testing.B) {
+	benchEchoNil(b, 10000, false, true)
+}
+
+func BenchmarkEchoNilNocompress1Worker(b *testing.B) {
+	benchEchoNil(b, 1, true, false)
+}
+
+func BenchmarkEchoNilNocompress10Workers(b *testing.B) {
+	benchEchoNil(b, 10, true, false)
+}
+
+func BenchmarkEchoNilNocompress100Workers(b *testing.B) {
+	benchEchoNil(b, 100, true, false)
+}
+
+func BenchmarkEchoNilNocompress1000Workers(b *testing.B) {
+	benchEchoNil(b, 1000, true, false)
+}
+
+func BenchmarkEchoNilNocompress10000Workers(b *testing.B) {
+	benchEchoNil(b, 10000, true, false)
 }
 
 func BenchmarkEchoInt1Worker(b *testing.B) {
@@ -391,6 +452,18 @@ func BenchmarkEchoStructNocompress10000Workers(b *testing.B) {
 	benchEchoStruct(b, 10000, true, false)
 }
 
+func benchEchoNil(b *testing.B, workers int, disableCompression, isUnixTransport bool) {
+	benchEchoFunc(b, workers, disableCompression, isUnixTransport, func(c *Client, n int) {
+		resp, err := c.Call(nil)
+		if err != nil {
+			b.Fatalf("Unexpected error: [%s]", err)
+		}
+		if resp != nil {
+			b.Fatalf("Unexpected response: %v", resp)
+		}
+	})
+}
+
 func benchEchoInt(b *testing.B, workers int, disableCompression, isUnixTransport bool) {
 	benchEchoFunc(b, workers, disableCompression, isUnixTransport, func(c *Client, n int) {
 		resp, err := c.Call(n)
@@ -502,6 +575,8 @@ func benchClientServerExt(b *testing.B, workers int, c *Client, s *Server, f fun
 
 	waitF()
 	wg.Wait()
+
+	b.Logf("client: %+v\nserver: %+v\n", c.Stats, s.Stats)
 }
 
 func createEchoServerAndClient(b *testing.B, disableCompression bool, workers int, isUnixTransport bool) (s *Server, c *Client) {
