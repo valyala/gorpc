@@ -203,7 +203,7 @@ func (c *Client) Call(request interface{}) (response interface{}, err error) {
 // Don't forget starting the client with Client.Start() before calling Client.Call().
 func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (response interface{}, err error) {
 	var m *AsyncResult
-	if m, err = c.CallAsync(request); err != nil {
+	if m, err = c.callAsync(request, false, true); err != nil {
 		return nil, err
 	}
 
@@ -212,6 +212,11 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 	select {
 	case <-m.Done:
 		response, err = m.Response, m.Error
+		m.Response = nil
+		m.Error = nil
+		m.Done = nil
+		m.done = nil
+		asyncResultPool.Put(m)
 	case <-t.C:
 		err = getClientTimeoutError(c, timeout)
 	}
@@ -247,7 +252,7 @@ func getClientTimeoutError(c *Client, timeout time.Duration) error {
 //
 // Don't forget starting the client with Client.Start() before calling Client.Send().
 func (c *Client) Send(request interface{}) error {
-	_, err := c.callAsync(request, true)
+	_, err := c.callAsync(request, true, true)
 	return err
 }
 
@@ -293,12 +298,26 @@ type AsyncResult struct {
 // Don't forget starting the client with Client.Start() before
 // calling Client.CallAsync().
 func (c *Client) CallAsync(request interface{}) (*AsyncResult, error) {
-	return c.callAsync(request, false)
+	return c.callAsync(request, false, false)
 }
 
-func (c *Client) callAsync(request interface{}, skipResponse bool) (ar *AsyncResult, err error) {
-	m := &AsyncResult{
-		request: request,
+var asyncResultPool = sync.Pool{
+	New: func() interface{} { return &AsyncResult{} },
+}
+
+func (c *Client) callAsync(request interface{}, skipResponse bool, usePool bool) (ar *AsyncResult, err error) {
+	if skipResponse {
+		usePool = true
+	}
+
+	var m *AsyncResult
+	if usePool {
+		m = asyncResultPool.Get().(*AsyncResult)
+		m.request = request
+	} else {
+		m = &AsyncResult{
+			request: request,
+		}
 	}
 	if !skipResponse {
 		m.t = time.Now()
@@ -489,7 +508,7 @@ func (b *Batch) CallTimeout(timeout time.Duration) error {
 func callAsyncRetry(c *Client, request interface{}, skipResponse bool, retriesCount int) (*AsyncResult, error) {
 	retriesCount++
 	for {
-		ar, err := c.callAsync(request, skipResponse)
+		ar, err := c.callAsync(request, skipResponse, false)
 		if err == nil {
 			return ar, nil
 		}
@@ -703,6 +722,10 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*AsyncResul
 
 		wr.Request = m.request
 		m.request = nil
+		if m.done == nil {
+			asyncResultPool.Put(m)
+		}
+
 		if err = e.Encode(wr); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
 			return
