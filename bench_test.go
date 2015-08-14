@@ -576,7 +576,7 @@ func benchClientServerExt(b *testing.B, workers int, c *Client, s *Server, f fun
 	waitF()
 	wg.Wait()
 
-	b.Logf("client: %+v\nserver: %+v\n", c.Stats, s.Stats)
+	//b.Logf("client: %+v\nserver: %+v\n", c.Stats, s.Stats)
 }
 
 func createEchoServerAndClient(b *testing.B, disableCompression bool, workers int, isUnixTransport bool) (s *Server, c *Client) {
