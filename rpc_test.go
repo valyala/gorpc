@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -699,19 +700,27 @@ func testNoBufferring(t *testing.T, requestFlushDelay, responseFlushDelay time.D
 	wg.Wait()
 }
 
-func TestSend(t *testing.T) {
+func TestSendNil(t *testing.T) {
+	testSend(t, nil)
+}
+
+func TestSendInt(t *testing.T) {
+	testSend(t, 12345)
+}
+
+func TestSendString(t *testing.T) {
+	testSend(t, "foobar")
+}
+
+func testSend(t *testing.T, value interface{}) {
 	var wg sync.WaitGroup
 
 	addr := getRandomAddr()
 	s := &Server{
 		Addr: addr,
 		Handler: func(clientAddr string, request interface{}) interface{} {
-			x, ok := request.(int)
-			if !ok {
-				t.Fatalf("Unexpected request type: %T. Expected int", request)
-			}
-			if x != 12345 {
-				t.Fatalf("Unexpected request: %d. Expected 12345", x)
+			if !reflect.DeepEqual(value, request) {
+				t.Fatalf("Unexpected request: %#v. Expected %#v", request, value)
 			}
 			wg.Done()
 			return "foobar_ignored"
@@ -730,7 +739,7 @@ func TestSend(t *testing.T) {
 
 	wg.Add(100)
 	for i := 0; i < 100; i++ {
-		if err := c.Send(12345); err != nil {
+		if err := c.Send(value); err != nil {
 			t.Fatalf("Unexpected error in Send(): [%s]", err)
 		}
 	}
@@ -796,6 +805,34 @@ func TestCallAsync(t *testing.T) {
 		}
 		if x != i {
 			t.Fatalf("Unexpected value returned: %d. Expected %d", x, i)
+		}
+	}
+}
+
+func TestNilHandler(t *testing.T) {
+	addr := "./test-nil-handler.sock"
+	s := NewUnixServer(addr, func(clientAddr string, request interface{}) interface{} {
+		if request != nil {
+			t.Fatalf("Unexpected request: %#v. Expected nil", request)
+		}
+		return nil
+	})
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := NewUnixClient(addr)
+	c.Start()
+	defer c.Stop()
+
+	for i := 0; i < 10; i++ {
+		resp, err := c.Call(nil)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		if resp != nil {
+			t.Fatalf("Unexpected response: %#v. Expected nil", resp)
 		}
 	}
 }
