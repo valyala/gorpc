@@ -371,6 +371,7 @@ func serveRequest(s *Server, responsesChan chan<- *serverMessage, stopChan <-cha
 	if skipResponse {
 		m.Response = nil
 		m.Error = ""
+		s.Stats.incRPCCalls()
 		serverMessagePool.Put(m)
 	}
 

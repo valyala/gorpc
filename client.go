@@ -723,6 +723,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*AsyncResul
 		wr.Request = m.request
 		m.request = nil
 		if m.done == nil {
+			c.Stats.incRPCCalls()
 			asyncResultPool.Put(m)
 		}
 
