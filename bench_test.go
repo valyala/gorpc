@@ -4,12 +4,288 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
+	"net"
+	"net/rpc"
+	"reflect"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+type BenchStruct struct {
+	StringSlice []string
+	IntSlice    []int
+	StringMap   map[string]string
+}
+
+type NetrpcService struct{}
+
+func (s *NetrpcService) Int(req int, resp *int) error {
+	*resp = req
+	return nil
+}
+
+func (s *NetrpcService) ByteSlice(req []byte, resp *[]byte) error {
+	*resp = req
+	return nil
+}
+
+func (s *NetrpcService) Struct(req *BenchStruct, resp *BenchStruct) error {
+	*resp = *req
+	return nil
+}
+
+func getTcpPipe(b *testing.B) (net.Conn, net.Conn) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		b.Fatalf("cannot listen to socket: %s", err)
+	}
+
+	ch := make(chan net.Conn, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			b.Fatalf("cannot accept incoming tcp conn: %s", err)
+		}
+		ch <- conn
+	}()
+
+	addr := ln.Addr().String()
+	connC, err := net.Dial("tcp", addr)
+	if err != nil {
+		b.Fatalf("cannot dial %s: %s", addr, err)
+	}
+	connS := <-ch
+	return connC, connS
+}
+
+func BenchmarkNetrpcInt(b *testing.B) {
+	connC, connS := getTcpPipe(b)
+	defer connC.Close()
+	defer connS.Close()
+
+	s := rpc.NewServer()
+	if err := s.Register(&NetrpcService{}); err != nil {
+		b.Fatalf("Error when registering rpc service: %s", err)
+	}
+	go s.ServeConn(connS)
+
+	c := rpc.NewClient(connC)
+	defer c.Close()
+
+	b.SetParallelism(250)
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		var x int
+		for i := 0; pb.Next(); i++ {
+			if err := c.Call("NetrpcService.Int", i, &x); err != nil {
+				b.Fatalf("Unexpected error when calling NetrpcService.Int(%d): %s", i, err)
+			}
+			if i != x {
+				b.Fatalf("Unexpected response: %d. Expected %d", x, i)
+			}
+		}
+	})
+}
+
+func BenchmarkNetrpcByteSlice(b *testing.B) {
+	connC, connS := getTcpPipe(b)
+	defer connC.Close()
+	defer connS.Close()
+
+	s := rpc.NewServer()
+	if err := s.Register(&NetrpcService{}); err != nil {
+		b.Fatalf("Error when registering rpc service: %s", err)
+	}
+	go s.ServeConn(connS)
+
+	c := rpc.NewClient(connC)
+	defer c.Close()
+
+	req := []byte("byte slice byte slice aaa bbb ccc foobar")
+	b.SetParallelism(250)
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		var resp []byte
+		for i := 0; pb.Next(); i++ {
+			if err := c.Call("NetrpcService.ByteSlice", req, &resp); err != nil {
+				b.Fatalf("Unexpected error when calling NetrpcService.ByteSlice(%q): %s", req, err)
+			}
+			if !bytes.Equal(resp, req) {
+				b.Fatalf("Unexpected response: %q. Expected %q", resp, req)
+			}
+		}
+	})
+}
+
+func BenchmarkNetrpcStruct(b *testing.B) {
+	connC, connS := getTcpPipe(b)
+	defer connC.Close()
+	defer connS.Close()
+
+	s := rpc.NewServer()
+	if err := s.Register(&NetrpcService{}); err != nil {
+		b.Fatalf("Error when registering rpc service: %s", err)
+	}
+	go s.ServeConn(connS)
+
+	c := rpc.NewClient(connC)
+	defer c.Close()
+
+	req := &BenchStruct{
+		StringSlice: []string{"foo", "bar", "aaa asdfdsfs", "nothwidthstanding"},
+		IntSlice:    []int{1, 2, 4, 5, 6, 6, 2, 324, 234324, 23432, 243, 432432},
+		StringMap: map[string]string{
+			"foo":              "bar",
+			"aadsafjdslk":      "afdsasfdsafdsafkjkjkjlkjlkj",
+			"kqjlqkwq":         "adsf kajdsf lkajlqkj lkewqrw",
+			"112321a dsf fds3": "af",
+		},
+	}
+	b.SetParallelism(250)
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		var resp BenchStruct
+		for i := 0; pb.Next(); i++ {
+			if err := c.Call("NetrpcService.Struct", req, &resp); err != nil {
+				b.Fatalf("Unexpected error when calling NetrpcService.Struct(%#v): %s", req, err)
+			}
+			if !reflect.DeepEqual(&resp, req) {
+				b.Fatalf("Unexpected response\n%#v\nExpected\n%#v\n", &resp, req)
+			}
+		}
+	})
+}
+
+type GorpcService struct{}
+
+func (s *GorpcService) Int(req int) int                      { return req }
+func (s *GorpcService) ByteSlice(req []byte) []byte          { return req }
+func (s *GorpcService) Struct(req *BenchStruct) *BenchStruct { return req }
+
+func BenchmarkGorpcInt(b *testing.B) {
+	addr := getRandomAddr()
+
+	d := NewDispatcher()
+	d.AddService("GorpcService", &GorpcService{})
+
+	s := NewTCPServer(addr, d.NewHandlerFunc())
+	if err := s.Start(); err != nil {
+		b.Fatalf("cannot start server: %s", err)
+	}
+	defer s.Stop()
+
+	c := NewTCPClient(addr)
+	c.Start()
+	defer c.Stop()
+
+	dc := d.NewServiceClient("GorpcService", c)
+
+	b.SetParallelism(250)
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for i := 0; pb.Next(); i++ {
+			v, err := dc.Call("Int", i)
+			if err != nil {
+				b.Fatalf("Unexpected error when calling GorpcService.Int(%d): %s", i, err)
+			}
+			x, ok := v.(int)
+			if !ok {
+				b.Fatalf("Unexpected response type: %T. Expected int", v)
+			}
+			if i != x {
+				b.Fatalf("Unexpected response: %d. Expected %d", x, i)
+			}
+		}
+	})
+}
+
+func BenchmarkGorpcByteSlice(b *testing.B) {
+	addr := getRandomAddr()
+
+	d := NewDispatcher()
+	d.AddService("GorpcService", &GorpcService{})
+
+	s := NewTCPServer(addr, d.NewHandlerFunc())
+	if err := s.Start(); err != nil {
+		b.Fatalf("cannot start server: %s", err)
+	}
+	defer s.Stop()
+
+	c := NewTCPClient(addr)
+	c.Start()
+	defer c.Stop()
+
+	dc := d.NewServiceClient("GorpcService", c)
+
+	req := []byte("byte slice byte slice aaa bbb ccc foobar")
+	b.SetParallelism(250)
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for i := 0; pb.Next(); i++ {
+			v, err := dc.Call("ByteSlice", req)
+			if err != nil {
+				b.Fatalf("Unexpected error when calling GorpcService.Int(%q): %s", req, err)
+			}
+			resp, ok := v.([]byte)
+			if !ok {
+				b.Fatalf("Unexpected response type: %T. Expected []byte", v)
+			}
+			if !bytes.Equal(resp, req) {
+				b.Fatalf("Unexpected response: %q. Expected %q", resp, req)
+			}
+		}
+	})
+}
+
+func BenchmarkGorpcStruct(b *testing.B) {
+	addr := getRandomAddr()
+
+	d := NewDispatcher()
+	d.AddService("GorpcService", &GorpcService{})
+
+	s := NewTCPServer(addr, d.NewHandlerFunc())
+	if err := s.Start(); err != nil {
+		b.Fatalf("cannot start server: %s", err)
+	}
+	defer s.Stop()
+
+	c := NewTCPClient(addr)
+	c.Start()
+	defer c.Stop()
+
+	dc := d.NewServiceClient("GorpcService", c)
+
+	req := &BenchStruct{
+		StringSlice: []string{"foo", "bar", "aaa asdfdsfs", "nothwidthstanding"},
+		IntSlice:    []int{1, 2, 4, 5, 6, 6, 2, 324, 234324, 23432, 243, 432432},
+		StringMap: map[string]string{
+			"foo":              "bar",
+			"aadsafjdslk":      "afdsasfdsafdsafkjkjkjlkjlkj",
+			"kqjlqkwq":         "adsf kajdsf lkajlqkj lkewqrw",
+			"112321a dsf fds3": "af",
+		},
+	}
+	b.SetParallelism(250)
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for i := 0; pb.Next(); i++ {
+			v, err := dc.Call("Struct", req)
+			if err != nil {
+				b.Fatalf("Unexpected error when calling GorpcService.Int(%#v): %s", req, err)
+			}
+			resp, ok := v.(*BenchStruct)
+			if !ok {
+				b.Fatalf("Unexpected response type: %T. Expected *BenchStruct", v)
+			}
+			if !reflect.DeepEqual(resp, req) {
+				b.Fatalf("Unexpected response\n%#v\nExpected\n%#v\n", resp, req)
+			}
+		}
+	})
+}
 
 func BenchmarkSendNil1Worker(b *testing.B) {
 	benchSendNil(b, 1)
