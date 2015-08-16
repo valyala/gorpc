@@ -105,6 +105,8 @@ c := &gorpc.Client{
 }
 c.Start()
 
+// All client methods issuing RPCs are thread-safe and goroutine-safe,
+// i.e. it is safe to call them from multiple concurrently running goroutines.
 resp, err := c.Call("foobar")
 if err != nil {
 	log.Fatalf("Error when sending request to server: %s", err)
