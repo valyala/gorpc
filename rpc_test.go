@@ -948,8 +948,10 @@ func TestEchoHandler(t *testing.T) {
 	type SS struct {
 		A int
 		B string
+		T time.Time
 	}
 	RegisterType(&SS{})
+	RegisterType(&time.Time{})
 
 	addr := getRandomAddr()
 	s := &Server{
@@ -991,7 +993,21 @@ func TestEchoHandler(t *testing.T) {
 		t.Fatalf("Unexpected value returned: %s. Expected 'abc'", expStr)
 	}
 
-	resp, err = c.Call(&SS{A: 432, B: "ssd"})
+	tt := time.Now()
+	resp, err = c.Call(tt)
+	if err != nil {
+		t.Fatalf("Unexpected error: [%s]", err)
+	}
+	expT, ok := resp.(*time.Time)
+	if !ok {
+		t.Fatalf("Unexpected response type: %T. Expected time.Time", resp)
+	}
+	if *expT != tt {
+		t.Fatalf("Unexpected value returned: %s. Expected %s", *expT, tt)
+	}
+
+	sS := &SS{A: 432, B: "ssd", T: tt}
+	resp, err = c.Call(sS)
 	if err != nil {
 		t.Fatalf("Unexpected error: [%s]", err)
 	}
@@ -999,8 +1015,8 @@ func TestEchoHandler(t *testing.T) {
 	if !ok {
 		t.Fatalf("Unexpected response type: %T. Expected SS", resp)
 	}
-	if expSs.A != 432 || expSs.B != "ssd" {
-		t.Fatalf("Unexpected value returned: %+v. Expected SS{A:432,B:'ssd'}", expSs)
+	if expSs.A != 432 || expSs.B != "ssd" || expSs.T != tt {
+		t.Fatalf("Unexpected value returned: %#v. Expected %#v", expSs, sS)
 	}
 }
 
