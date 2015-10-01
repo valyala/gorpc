@@ -1,6 +1,8 @@
 package gorpc
 
 import (
+	"encoding"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"reflect"
@@ -242,36 +244,39 @@ func validateType(t reflect.Type) (err error) {
 	switch t.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.UnsafePointer:
 		err = fmt.Errorf("%s. Found [%s]", t.Kind(), t)
-		return
+		return err
 	case reflect.Array, reflect.Slice:
 		if err = validateType(t.Elem()); err != nil {
 			err = fmt.Errorf("%s in the %s [%s]", err, t.Kind(), t)
-			return
+			return err
 		}
 	case reflect.Map:
 		if err = validateType(t.Elem()); err != nil {
 			err = fmt.Errorf("%s in the value of map [%s]", err, t)
-			return
+			return err
 		}
 		if err = validateType(t.Key()); err != nil {
 			err = fmt.Errorf("%s in the key of map [%s]", err, t)
-			return
+			return err
 		}
 	case reflect.Struct:
+		if supportsGob(t) {
+			return nil
+		}
 		n := 0
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)
 			if f.PkgPath == "" {
 				if err = validateType(f.Type); err != nil {
 					err = fmt.Errorf("%s in the field [%s] of struct [%s]", err, f.Name, t)
-					return
+					return err
 				}
 				n++
 			}
 		}
 		if n == 0 {
 			err = fmt.Errorf("struct without exported fields [%s]", t)
-			return
+			return err
 		}
 	}
 
@@ -400,6 +405,27 @@ var errt = reflect.TypeOf((*error)(nil)).Elem()
 
 func isErrorType(t reflect.Type) bool {
 	return t.Implements(errt)
+}
+
+var (
+	gobEncoderType        = reflect.TypeOf((*gob.GobEncoder)(nil)).Elem()
+	gobDecoderType        = reflect.TypeOf((*gob.GobDecoder)(nil)).Elem()
+	binaryMarshalerType   = reflect.TypeOf((*encoding.BinaryMarshaler)(nil)).Elem()
+	binaryUnmarshalerType = reflect.TypeOf((*encoding.BinaryUnmarshaler)(nil)).Elem()
+)
+
+func supportsGob(t reflect.Type) bool {
+	if t.Kind() != reflect.Struct {
+		panic(fmt.Sprintf("non-struct type passed to supportsGob: %s", t))
+	}
+	t = reflect.PtrTo(t)
+	if t.Implements(gobEncoderType) && t.Implements(gobDecoderType) {
+		return true
+	}
+	if t.Implements(binaryMarshalerType) && t.Implements(binaryUnmarshalerType) {
+		return true
+	}
+	return false
 }
 
 func getErrorString(v reflect.Value) string {

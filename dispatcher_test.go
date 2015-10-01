@@ -359,6 +359,65 @@ func TestDispatcherEchoFuncCall(t *testing.T) {
 	})
 }
 
+func TestDispatcherEchoGobEncoding(t *testing.T) {
+	d := NewDispatcher()
+	d.AddFunc("Echo", func(request *time.Time) *time.Time { return request })
+	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
+		// time.Time implements gob encoding
+		tt := time.Now()
+		res, err := dc.Call("Echo", &tt)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		rest, ok := res.(*time.Time)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected %T", rest, &tt)
+		}
+		if *rest != tt {
+			t.Fatalf("Unexpected response: [%#v]. Expected [%#v]", *rest, tt)
+		}
+	})
+}
+
+type sBinaryEnc struct {
+	u uint32
+	s string
+}
+
+func (s *sBinaryEnc) MarshalBinary() (b []byte, err error) {
+	b = append(b, byte(s.u>>24), byte(s.u>>16), byte(s.u>>8), byte(s.u))
+	b = append(b, s.s...)
+	return b, nil
+}
+
+func (s *sBinaryEnc) UnmarshalBinary(b []byte) error {
+	s.u = (uint32(b[0]) << 24) | (uint32(b[1]) << 16) | (uint32(b[2]) << 8) | uint32(b[3])
+	s.s = string(b[4:])
+	return nil
+}
+
+func TestDispatcherEchoBinaryEncoding(t *testing.T) {
+	d := NewDispatcher()
+	d.AddFunc("Echo", func(request *sBinaryEnc) *sBinaryEnc { return request })
+	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
+		s := &sBinaryEnc{
+			u: 1893243243,
+			s: "foobarbaz",
+		}
+		res, err := dc.Call("Echo", s)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		ress, ok := res.(*sBinaryEnc)
+		if !ok {
+			t.Fatalf("Unexpected response type: %T. Expected %T", ress, s)
+		}
+		if *ress != *s {
+			t.Fatalf("Unexpected response: [%#v]. Expected [%#v]", *ress, *s)
+		}
+	})
+}
+
 func TestDispatcherStructArgCall(t *testing.T) {
 	type RequestArg struct {
 		A int
@@ -368,13 +427,16 @@ func TestDispatcherStructArgCall(t *testing.T) {
 	type ResponseArg struct {
 		C string
 		D int
+		T time.Time
 	}
 
+	tt := time.Now()
 	d := NewDispatcher()
 	d.AddFunc("fooBar", func(request *RequestArg) *ResponseArg {
 		return &ResponseArg{
 			C: request.B,
 			D: request.A,
+			T: tt,
 		}
 	})
 
@@ -405,8 +467,8 @@ func TestDispatcherStructArgCall(t *testing.T) {
 		if ress, ok = res.(*ResponseArg); !ok {
 			t.Fatalf("Unexpected response type: %T. Expected *ResponseArg", ress)
 		}
-		if ress.C != reqs.B || ress.D != reqs.A {
-			t.Fatalf("Unexpected response: [%+v]. Expected &ResponseArg{C:%s, D:%d}", ress, reqs.B, reqs.A)
+		if ress.C != reqs.B || ress.D != reqs.A || ress.T != tt {
+			t.Fatalf("Unexpected response: [%+v]. Expected &ResponseArg{C:%s, D:%d, T:%s}", ress, reqs.B, reqs.A, tt)
 		}
 	})
 }
