@@ -263,6 +263,10 @@ func validateType(t reflect.Type) (err error) {
 		if supportsGob(t) {
 			return nil
 		}
+		// Special case for struct{}
+		if t.NumField() == 0 {
+			return nil
+		}
 		n := 0
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)

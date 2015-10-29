@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -375,6 +376,28 @@ func TestDispatcherEchoGobEncoding(t *testing.T) {
 		}
 		if *rest != tt {
 			t.Fatalf("Unexpected response: [%#v]. Expected [%#v]", *rest, tt)
+		}
+	})
+}
+
+func TestDispatcherEchoEmptyStruct(t *testing.T) {
+	d := NewDispatcher()
+	d.AddFunc("Echo", func(request map[string]struct{}) map[string]struct{} { return request })
+	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
+		m := map[string]struct{}{
+			"foo": struct{}{},
+			"bar": struct{}{},
+		}
+		res, err := dc.Call("Echo", m)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		resm, ok := res.(map[string]struct{})
+		if !ok {
+			t.Fatalf("Unexpected response type %T. Expected %T", resm, m)
+		}
+		if !reflect.DeepEqual(m, resm) {
+			t.Fatalf("Unexpected response: [%#v]. Expected [%#v]", resm, m)
 		}
 	})
 }
