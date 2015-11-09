@@ -809,6 +809,57 @@ func TestCallAsync(t *testing.T) {
 	}
 }
 
+func TestClientPendingRequestsCount(t *testing.T) {
+	addr := "./client-pending-requests-count.sock"
+	respCh := make(chan struct{})
+	reqCh := make(chan struct{}, 1)
+	s := NewUnixServer(addr, func(clientAddr string, request interface{}) interface{} {
+		reqCh <- struct{}{}
+		<-respCh
+		return request
+	})
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := NewUnixClient(addr)
+	c.Start()
+	defer c.Stop()
+
+	if c.PendingRequestsCount() != 0 {
+		t.Fatalf("unexpected number of pending requests: %d. Expected 0", c.PendingRequestsCount())
+	}
+	var resps []*AsyncResult
+	for i := 0; i < 10; i++ {
+		resp, err := c.CallAsync(nil)
+		if err != nil {
+			t.Fatalf("Unexpected error: [%s]", err)
+		}
+		select {
+		case <-reqCh:
+		case <-time.After(time.Second):
+			t.Fatalf("it looks like server is stuck")
+		}
+		if c.PendingRequestsCount() != i+1 {
+			t.Fatalf("unexpected number of pending request: %d. Expected %d", c.PendingRequestsCount(), i+1)
+		}
+		resps = append(resps, resp)
+	}
+
+	close(respCh)
+	for _, resp := range resps {
+		select {
+		case <-resp.Done:
+		case <-time.After(time.Second):
+			t.Fatalf("it looks like rpc is broken")
+		}
+	}
+	if c.PendingRequestsCount() != 0 {
+		t.Fatalf("unexpected number of pending requests: %d. Expected 0", c.PendingRequestsCount())
+	}
+}
+
 func TestNilHandler(t *testing.T) {
 	addr := "./test-nil-handler.sock"
 	s := NewUnixServer(addr, func(clientAddr string, request interface{}) interface{} {

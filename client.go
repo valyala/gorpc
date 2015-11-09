@@ -105,7 +105,8 @@ type Client struct {
 	// any time you wish.
 	Stats ConnStats
 
-	requestsChan chan *AsyncResult
+	pendingRequestsCount uint32
+	requestsChan         chan *AsyncResult
 
 	clientStopChan chan struct{}
 	stopWg         sync.WaitGroup
@@ -165,6 +166,18 @@ func (c *Client) Stop() {
 	close(c.clientStopChan)
 	c.stopWg.Wait()
 	c.clientStopChan = nil
+}
+
+// PendingRequestsCount returns the instant number of pending requests.
+//
+// The main purpose of this function is to use in load-balancing schemes where
+// load should be balanced between multiple rpc clients.
+//
+// Don't forget starting the client with Client.Start() before calling
+// this function.
+func (c *Client) PendingRequestsCount() int {
+	n := atomic.LoadUint32(&c.pendingRequestsCount)
+	return int(n) + len(c.requestsChan)
 }
 
 // Call sends the given request to the server and obtains response
@@ -649,6 +662,7 @@ func clientHandleConnection(c *Client, conn io.ReadWriteCloser) {
 		}
 	}
 	for _, m := range pendingRequests {
+		atomic.AddUint32(&c.pendingRequestsCount, ^uint32(0))
 		m.Error = err
 		if m.done != nil {
 			close(m.done)
@@ -711,6 +725,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*AsyncResul
 			}
 			pendingRequests[msgID] = m
 			pendingRequestsLock.Unlock()
+			atomic.AddUint32(&c.pendingRequestsCount, 1)
 
 			if n > 10*c.PendingRequests {
 				err = fmt.Errorf("gorpc.Client: [%s]. The server didn't return %d responses yet. Closing server connection in order to prevent client resource leaks", c.Addr, n)
@@ -766,6 +781,8 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*AsyncResul
 		if !ok {
 			err = fmt.Errorf("gorpc.Client: [%s]. Unexpected msgID=[%d] obtained from server", c.Addr, wr.ID)
 			return
+		} else {
+			atomic.AddUint32(&c.pendingRequestsCount, ^uint32(0))
 		}
 
 		m.Response = wr.Response
