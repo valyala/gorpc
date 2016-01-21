@@ -910,7 +910,8 @@ func TestAsyncResultCancel(t *testing.T) {
 	c.Start()
 	defer c.Stop()
 
-	slowRes, err := c.CallAsync(123)
+	expectedResponse := 123
+	slowRes, err := c.CallAsync(expectedResponse)
 	if err != nil {
 		t.Fatalf("unexpected error: [%s]", err)
 	}
@@ -929,6 +930,12 @@ func TestAsyncResultCancel(t *testing.T) {
 	case <-slowRes.Done:
 	case <-time.After(time.Second):
 		t.Fatalf("timeout")
+	}
+	if slowRes.Error != nil {
+		t.Fatalf("unexpected error: [%s]", err)
+	}
+	if !reflect.DeepEqual(slowRes.Response, expectedResponse) {
+		t.Fatalf("unexpected response: %v. Expecting %v", slowRes.Response, expectedResponse)
 	}
 
 	canceledCalls := 0
