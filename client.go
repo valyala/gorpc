@@ -225,11 +225,7 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 	select {
 	case <-m.Done:
 		response, err = m.Response, m.Error
-		m.Response = nil
-		m.Error = nil
-		m.Done = nil
-		m.done = nil
-		asyncResultPool.Put(m)
+		releaseAsyncResult(m)
 	case <-t.C:
 		err = getClientTimeoutError(c, timeout)
 	}
@@ -237,6 +233,28 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 	releaseTimer(t)
 	return
 }
+
+func acquireAsyncResult() *AsyncResult {
+	v := asyncResultPool.Get()
+	if v == nil {
+		return &AsyncResult{}
+	}
+	return v.(*AsyncResult)
+}
+
+var zeroTime time.Time
+
+func releaseAsyncResult(m *AsyncResult) {
+	m.Response = nil
+	m.Error = nil
+	m.Done = nil
+	m.request = nil
+	m.t = zeroTime
+	m.done = nil
+	asyncResultPool.Put(m)
+}
+
+var asyncResultPool sync.Pool
 
 func getClientTimeoutError(c *Client, timeout time.Duration) error {
 	err := fmt.Errorf("gorpc.Client: [%s]. Cannot obtain response during timeout=%s", c.Addr, timeout)
@@ -314,10 +332,6 @@ func (c *Client) CallAsync(request interface{}) (*AsyncResult, error) {
 	return c.callAsync(request, false, false)
 }
 
-var asyncResultPool = sync.Pool{
-	New: func() interface{} { return &AsyncResult{} },
-}
-
 func (c *Client) callAsync(request interface{}, skipResponse bool, usePool bool) (ar *AsyncResult, err error) {
 	if skipResponse {
 		usePool = true
@@ -325,13 +339,11 @@ func (c *Client) callAsync(request interface{}, skipResponse bool, usePool bool)
 
 	var m *AsyncResult
 	if usePool {
-		m = asyncResultPool.Get().(*AsyncResult)
-		m.request = request
+		m = acquireAsyncResult()
 	} else {
-		m = &AsyncResult{
-			request: request,
-		}
+		m = &AsyncResult{}
 	}
+	m.request = request
 	if !skipResponse {
 		m.t = time.Now()
 		m.done = make(chan struct{})
@@ -342,6 +354,10 @@ func (c *Client) callAsync(request interface{}, skipResponse bool, usePool bool)
 	case c.requestsChan <- m:
 		return m, nil
 	default:
+		// Release m even if usePool = true, since m wasn't exposed
+		// to the caller yet.
+		releaseAsyncResult(m)
+
 		err = fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown. Try increasing Client.PendingRequests value", c.Addr, cap(c.requestsChan))
 		c.LogError("%s", err)
 		err = &ClientError{
@@ -736,10 +752,9 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*AsyncResul
 		}
 
 		wr.Request = m.request
-		m.request = nil
 		if m.done == nil {
 			c.Stats.incRPCCalls()
-			asyncResultPool.Put(m)
+			releaseAsyncResult(m)
 		}
 
 		if err = e.Encode(wr); err != nil {
