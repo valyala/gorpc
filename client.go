@@ -850,9 +850,9 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*AsyncResul
 			wr.Error = ""
 		}
 
-		close(m.done)
-
 		c.Stats.incRPCCalls()
 		c.Stats.incRPCTime(uint64(time.Since(m.t).Seconds() * 1000))
+
+		close(m.done)
 	}
 }
