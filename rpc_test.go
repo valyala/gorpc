@@ -888,6 +888,69 @@ func TestNilHandler(t *testing.T) {
 	}
 }
 
+func TestAsyncResultCancel(t *testing.T) {
+	addr := getRandomAddr()
+	s := &Server{
+		Addr: addr,
+		Handler: func(clientAddr string, request interface{}) interface{} {
+			time.Sleep(time.Millisecond * 100)
+			return request
+		},
+		Concurrency: 1,
+	}
+	if err := s.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer s.Stop()
+
+	c := &Client{
+		Addr:           addr,
+		SendBufferSize: 2,
+	}
+	c.Start()
+	defer c.Stop()
+
+	slowRes, err := c.CallAsync(123)
+	if err != nil {
+		t.Fatalf("unexpected error: [%s]", err)
+	}
+
+	var canceledResults []*AsyncResult
+	for i := 0; i < 10; i++ {
+		res, err := c.CallAsync(456)
+		if err != nil {
+			t.Fatalf("unexpected error when sending request #%d: [%s]", i, err)
+		}
+		res.Cancel()
+		canceledResults = append(canceledResults, res)
+	}
+
+	select {
+	case <-slowRes.Done:
+	case <-time.After(time.Second):
+		t.Fatalf("timeout")
+	}
+
+	canceledCalls := 0
+	for _, res := range canceledResults {
+		select {
+		case <-res.Done:
+		case <-time.After(time.Second):
+			t.Fatalf("timeout")
+		}
+		if res.Error != nil {
+			ce := res.Error.(*ClientError)
+			if ce.Canceled {
+				canceledCalls++
+			}
+		}
+	}
+
+	if canceledCalls == 0 {
+		t.Fatalf("expecting at least one canceled call")
+	}
+}
+
 func TestIntHandler(t *testing.T) {
 	addr := getRandomAddr()
 	s := &Server{

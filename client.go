@@ -227,6 +227,7 @@ func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (respon
 		response, err = m.Response, m.Error
 		releaseAsyncResult(m)
 	case <-t.C:
+		m.Cancel()
 		err = getClientTimeoutError(c, timeout)
 	}
 
@@ -299,9 +300,26 @@ type AsyncResult struct {
 	// Response and Error become available after <-Done unblocks.
 	Done <-chan struct{}
 
-	request interface{}
-	t       time.Time
-	done    chan struct{}
+	request  interface{}
+	t        time.Time
+	done     chan struct{}
+	canceled uint32
+}
+
+// Cancel cancels async call.
+//
+// Canceled call isn't sent to the server unless it is already sent there.
+// Canceled call may successfully complete if it has been already sent
+// to the server before Cancel call.
+//
+// It is safe calling this function multiple times from concurrently
+// running goroutines.
+func (m *AsyncResult) Cancel() {
+	atomic.StoreUint32(&m.canceled, 1)
+}
+
+func (m *AsyncResult) isCanceled() bool {
+	return atomic.LoadUint32(&m.canceled) != 0
 }
 
 // CallAsync starts async rpc call.
@@ -332,12 +350,11 @@ func (c *Client) CallAsync(request interface{}) (*AsyncResult, error) {
 	return c.callAsync(request, false, false)
 }
 
-func (c *Client) callAsync(request interface{}, skipResponse bool, usePool bool) (ar *AsyncResult, err error) {
+func (c *Client) callAsync(request interface{}, skipResponse bool, usePool bool) (m *AsyncResult, err error) {
 	if skipResponse {
 		usePool = true
 	}
 
-	var m *AsyncResult
 	if usePool {
 		m = acquireAsyncResult()
 	} else {
@@ -495,30 +512,31 @@ func (b *Batch) CallTimeout(timeout time.Duration) error {
 	results := make([]*AsyncResult, len(ops))
 	for i := range ops {
 		op := ops[i]
-		r, err := callAsyncRetry(b.c, op.request, op.done == nil, 5)
+		m, err := callAsyncRetry(b.c, op.request, op.done == nil, 5)
 		if err != nil {
 			return err
 		}
-		results[i] = r
+		results[i] = m
 	}
 
 	t := acquireTimer(timeout)
 
 	for i := range results {
-		r := results[i]
+		m := results[i]
 		op := ops[i]
 		if op.done == nil {
 			continue
 		}
 
 		select {
-		case <-r.Done:
-			op.Response, op.Error = r.Response, r.Error
+		case <-m.Done:
+			op.Response, op.Error = m.Response, m.Error
 			close(op.done)
 		case <-t.C:
 			releaseTimer(t)
 			err := getClientTimeoutError(b.c, timeout)
 			for ; i < len(results); i++ {
+				results[i].Cancel()
 				op = ops[i]
 				op.Error = err
 				if op.done != nil {
@@ -537,9 +555,9 @@ func (b *Batch) CallTimeout(timeout time.Duration) error {
 func callAsyncRetry(c *Client, request interface{}, skipResponse bool, retriesCount int) (*AsyncResult, error) {
 	retriesCount++
 	for {
-		ar, err := c.callAsync(request, skipResponse, false)
+		m, err := c.callAsync(request, skipResponse, false)
 		if err == nil {
-			return ar, nil
+			return m, nil
 		}
 		if !err.(*ClientError).Overflow {
 			return nil, err
@@ -567,11 +585,21 @@ type ClientError struct {
 	// Increase PendingRequests if you see a lot of such errors.
 	Overflow bool
 
+	// May be set if AsyncResult.Cancel is called.
+	Canceled bool
+
 	err error
 }
 
 func (e *ClientError) Error() string {
 	return e.err.Error()
+}
+
+// ErrCanceled may be returned from rpc call if AsyncResult.Cancel
+// has been called.
+var ErrCanceled = &ClientError{
+	Canceled: true,
+	err:      fmt.Errorf("the call has been canceled"),
 }
 
 func clientHandler(c *Client) {
@@ -722,6 +750,16 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*AsyncResul
 
 		if flushChan == nil {
 			flushChan = getFlushChan(t, c.FlushDelay)
+		}
+
+		if m.isCanceled() {
+			if m.done != nil {
+				m.Error = ErrCanceled
+				close(m.done)
+			} else {
+				releaseAsyncResult(m)
+			}
+			continue
 		}
 
 		if m.done == nil {
