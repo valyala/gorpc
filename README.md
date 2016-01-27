@@ -26,13 +26,16 @@ packets and the amount of network bandwidth) required for RPC processing under
 high load.
 
 
-Gorpc additionally provides the following features missing
+Additionally gorpc provides the following features missing
 in [net/rpc](http://golang.org/pkg/net/rpc/):
 
 * Client automatically manages connections and automatically reconnects
   to the server on connection errors.
-* Client supports response timeouts out of the box.
-* Client supports RPC batching out of the box.
+* Client supports response timeouts.
+* Client supports RPC batching.
+* Client supports async requests' canceling.
+* Client prioritizes new requests over old pending requests if server fails
+  to handle the given load.
 * Client detects stuck servers and immediately returns error to the caller.
 * Client supports fast message passing to the Server, i.e. requests
   without responses.

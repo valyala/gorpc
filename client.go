@@ -371,17 +371,48 @@ func (c *Client) callAsync(request interface{}, skipResponse bool, usePool bool)
 	case c.requestsChan <- m:
 		return m, nil
 	default:
-		// Release m even if usePool = true, since m wasn't exposed
-		// to the caller yet.
-		releaseAsyncResult(m)
-
-		err = fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown. Try increasing Client.PendingRequests value", c.Addr, cap(c.requestsChan))
-		c.LogError("%s", err)
-		err = &ClientError{
-			Overflow: true,
-			err:      err,
+		// Try substituting the oldest async request by the new one
+		// on requests' queue overflow.
+		// This increases the chances for new request to succeed
+		// without timeout.
+		if skipResponse {
+			// Immediately notify the caller not interested
+			// in the response on requests' queue overflow, since
+			// there are no other ways to notify it later.
+			releaseAsyncResult(m)
+			return nil, overflowClientError(c)
 		}
-		return nil, err
+
+		select {
+		case mm := <-c.requestsChan:
+			if mm.done != nil {
+				mm.Error = overflowClientError(c)
+				close(mm.done)
+			} else {
+				releaseAsyncResult(mm)
+			}
+		default:
+		}
+
+		select {
+		case c.requestsChan <- m:
+			return m, nil
+		default:
+			// Release m even if usePool = true, since m wasn't exposed
+			// to the caller yet.
+			releaseAsyncResult(m)
+			return nil, overflowClientError(c)
+		}
+	}
+}
+
+func overflowClientError(c *Client) error {
+	err := fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown. Try increasing Client.PendingRequests value", c.Addr, cap(c.requestsChan))
+	c.LogError("%s", err)
+	return &ClientError{
+		Overflow: true,
+		err: fmt.Errorf("gorpc.Client: [%s]. Requests' queue with size=%d is overflown. "+
+			"Try increasing Client.PendingRequests value", c.Addr, cap(c.requestsChan)),
 	}
 }
 
