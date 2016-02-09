@@ -77,7 +77,7 @@ func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
 	}
 	var err error
 	if fd.inNum, fd.reqt, err = validateFunc(funcName, fd.fv, false); err != nil {
-		logPanic("gorpc.Disaptcher: %s", err)
+		logPanic("gorpc.Dispatcher: %s", err)
 	}
 	sd.funcMap[funcName] = fd
 }
