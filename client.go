@@ -865,9 +865,9 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*AsyncResul
 		if !ok {
 			err = fmt.Errorf("gorpc.Client: [%s]. Unexpected msgID=[%d] obtained from server", c.Addr, wr.ID)
 			return
-		} else {
-			atomic.AddUint32(&c.pendingRequestsCount, ^uint32(0))
 		}
+
+		atomic.AddUint32(&c.pendingRequestsCount, ^uint32(0))
 
 		m.Response = wr.Response
 

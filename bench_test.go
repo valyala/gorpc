@@ -37,7 +37,7 @@ func (s *NetrpcService) Struct(req *BenchStruct, resp *BenchStruct) error {
 	return nil
 }
 
-func getTcpPipe(b *testing.B) (net.Conn, net.Conn) {
+func getTCPPipe(b *testing.B) (net.Conn, net.Conn) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		b.Fatalf("cannot listen to socket: %s", err)
@@ -62,7 +62,7 @@ func getTcpPipe(b *testing.B) (net.Conn, net.Conn) {
 }
 
 func BenchmarkNetrpcInt(b *testing.B) {
-	connC, connS := getTcpPipe(b)
+	connC, connS := getTCPPipe(b)
 	defer connC.Close()
 	defer connS.Close()
 
@@ -91,7 +91,7 @@ func BenchmarkNetrpcInt(b *testing.B) {
 }
 
 func BenchmarkNetrpcByteSlice(b *testing.B) {
-	connC, connS := getTcpPipe(b)
+	connC, connS := getTCPPipe(b)
 	defer connC.Close()
 	defer connS.Close()
 
@@ -121,7 +121,7 @@ func BenchmarkNetrpcByteSlice(b *testing.B) {
 }
 
 func BenchmarkNetrpcStruct(b *testing.B) {
-	connC, connS := getTcpPipe(b)
+	connC, connS := getTCPPipe(b)
 	defer connC.Close()
 	defer connS.Close()
 
