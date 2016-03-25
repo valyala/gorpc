@@ -29,14 +29,14 @@ func ExampleServer() {
 	handlerFunc := func(clientAddr string, request interface{}) interface{} {
 		return request
 	}
-	s := NewTCPServer(":43216", handlerFunc)
+	s := NewTCPServer("127.0.0.1:43216", handlerFunc)
 	if err := s.Start(); err != nil {
 		log.Fatalf("Cannot start server: [%s]", err)
 	}
 	defer s.Stop()
 
 	// Connect client to the echo server
-	c := NewTCPClient(":43216")
+	c := NewTCPClient("127.0.0.1:43216")
 	c.Start()
 	defer c.Stop()
 
@@ -102,14 +102,14 @@ func ExampleDispatcherClient_NewBatch() {
 	d.AddFunc("Echo", func(x int) int { return x })
 
 	// Start the server serving all the registered functions above
-	s := NewTCPServer(":12445", d.NewHandlerFunc())
+	s := NewTCPServer("127.0.0.1:12445", d.NewHandlerFunc())
 	if err := s.Start(); err != nil {
 		log.Fatalf("Cannot start rpc server: [%s]", err)
 	}
 	defer s.Stop()
 
 	// Start the client and connect it to the server
-	c := NewTCPClient(":12445")
+	c := NewTCPClient("127.0.0.1:12445")
 	c.Start()
 	defer c.Stop()
 
@@ -197,14 +197,14 @@ func ExampleDispatcher_funcCalls() {
 	})
 
 	// Start the server serving all the registered functions above
-	s := NewTCPServer(":12345", d.NewHandlerFunc())
+	s := NewTCPServer("127.0.0.1:12345", d.NewHandlerFunc())
 	if err := s.Start(); err != nil {
 		log.Fatalf("Cannot start rpc server: [%s]", err)
 	}
 	defer s.Stop()
 
 	// Start the client and connect it to the server
-	c := NewTCPClient(":12345")
+	c := NewTCPClient("127.0.0.1:12345")
 	c.Start()
 	defer c.Stop()
 
