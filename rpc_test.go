@@ -22,7 +22,7 @@ func echoHandler(clientAddr string, request interface{}) interface{} {
 }
 
 func getRandomAddr() string {
-	return fmt.Sprintf(":%d", rand.Intn(20000)+10000)
+	return fmt.Sprintf("127.0.0.1:%d", rand.Intn(20000)+10000)
 }
 
 func TestBadClient(t *testing.T) {

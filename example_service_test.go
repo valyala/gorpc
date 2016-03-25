@@ -34,7 +34,7 @@ func ExampleDispatcher_serviceCalls() {
 	d.AddService("MyService", service)
 
 	// Start rpc server serving registered service.
-	addr := ":7892"
+	addr := "127.0.0.1:7892"
 	s := NewTCPServer(addr, d.NewHandlerFunc())
 	if err := s.Start(); err != nil {
 		log.Fatalf("Cannot start rpc server: [%s]", err)
