@@ -454,6 +454,10 @@ func (ln *customListener) Close() error {
 	return nil
 }
 
+func (ln *customListener) ListenAddr() net.Addr {
+	return nil
+}
+
 func TestCustomTransport(t *testing.T) {
 	rc, ws := io.Pipe()
 	rs, wc := io.Pipe()
