@@ -45,6 +45,9 @@ type Listener interface {
 	// Close is called.
 	// All subsequent calls to Accept() must immediately return error.
 	Close() error
+
+	// Addr returns the listener's network address.
+	ListenAddr() net.Addr
 }
 
 func defaultDial(addr string) (conn io.ReadWriteCloser, err error) {
@@ -58,6 +61,13 @@ type defaultListener struct {
 func (ln *defaultListener) Init(addr string) (err error) {
 	ln.L, err = net.Listen("tcp", addr)
 	return
+}
+
+func (ln *defaultListener) ListenAddr() net.Addr {
+	if ln.L != nil {
+		return ln.L.Addr()
+	}
+	return nil
 }
 
 func (ln *defaultListener) Accept() (conn io.ReadWriteCloser, clientAddr string, err error) {
@@ -95,6 +105,13 @@ type netListener struct {
 func (ln *netListener) Init(addr string) (err error) {
 	ln.L, err = ln.F(addr)
 	return
+}
+
+func (ln *netListener) ListenAddr() net.Addr {
+	if ln.L != nil {
+		return ln.L.Addr()
+	}
+	return nil
 }
 
 func (ln *netListener) Accept() (conn io.ReadWriteCloser, clientAddr string, err error) {
