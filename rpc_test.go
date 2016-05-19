@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"reflect"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -1445,5 +1446,43 @@ func TestBatchCallMixed(t *testing.T) {
 	case <-doneCh:
 	case <-time.After(200 * time.Millisecond):
 		t.Fatalf("It looks like server didn't receive batched requests")
+	}
+}
+
+func TestGetRealListenerAddr(t *testing.T) {
+	addr := getRandomAddr()
+	s := NewTCPServer(addr, echoHandler)
+	s.Start()
+	defer s.Stop()
+	realAddr := s.Listener.ListenAddr().String()
+	if realAddr != addr {
+		t.Fatalf("network listen address should be the same: expect %s, actually %s", addr, realAddr)
+	}
+
+	unixAddr := "./gorpc-test-getreal-sock.unix"
+	unixServer := NewUnixServer(unixAddr, echoHandler)
+	if err := unixServer.Start(); err != nil {
+		t.Fatalf("Server.Start() failed: [%s]", err)
+	}
+	defer unixServer.Stop()
+	realAddr = unixServer.Listener.ListenAddr().String()
+	if realAddr != unixAddr {
+		t.Fatalf("network listen address should be the same: expect %s, actually %s", unixAddr, realAddr)
+	}
+
+	s2 := NewTCPServer("127.0.0.1:0", echoHandler)
+	s2.Start()
+	defer s2.Stop()
+	realAddr = s2.Listener.ListenAddr().String()
+	host, port, err := net.SplitHostPort(realAddr)
+	if err != nil {
+		t.Fatalf("network listen address should be valid, actually %s", realAddr)
+	}
+	if host != "127.0.0.1" {
+		t.Fatalf("network listen address should be 127.0.0.1, actually %s", host)
+	}
+	portInt, _ := strconv.Atoi(port)
+	if portInt == 0 {
+		t.Fatalf("network listen port should not be 0, %s", port)
 	}
 }
