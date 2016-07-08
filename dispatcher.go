@@ -447,13 +447,9 @@ type DispatcherClient struct {
 	serviceName string
 }
 
-// NewFuncClient returns a client suitable for calling functions registered
-// via AddFunc().
-func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
-	if len(d.serviceMap) == 0 || d.serviceMap[""] == nil {
-		logPanic("gorpc.Dispatcher: register at least one function with AddFunc() before calling NewFuncClient()")
-	}
-
+// NewDispatcherFuncClient returns a client suitable for calling functions
+// registered via AddFunc().
+func NewDispatcherFuncClient(c *Client) *DispatcherClient {
 	return &DispatcherClient{
 		c: c,
 	}
@@ -463,6 +459,27 @@ func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
 // of the service with name serviceName registered via AddService().
 //
 // It is safe creating multiple service clients over a single underlying client.
+func NewDispatcherServiceClient(serviceName string, c *Client) *DispatcherClient {
+	return &DispatcherClient{
+		c:           c,
+		serviceName: serviceName,
+	}
+}
+
+// NewFuncClient checks and returns a client suitable for calling functions
+// registered via AddFunc().
+func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if len(d.serviceMap) == 0 || d.serviceMap[""] == nil {
+		logPanic("gorpc.Dispatcher: register at least one function with AddFunc() before calling NewFuncClient()")
+	}
+
+	return NewDispatcherFuncClient(c)
+}
+
+// NewServiceClient checks and returns a client suitable for calling methods
+// of the service with name serviceName registered via AddService().
 func (d *Dispatcher) NewServiceClient(serviceName string, c *Client) *DispatcherClient {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -470,10 +487,7 @@ func (d *Dispatcher) NewServiceClient(serviceName string, c *Client) *Dispatcher
 		logPanic("gorpc.Dispatcher: service [%s] must be registered with AddService() before calling NewServiceClient()", serviceName)
 	}
 
-	return &DispatcherClient{
-		c:           c,
-		serviceName: serviceName,
-	}
+	return NewDispatcherServiceClient(serviceName, c)
 }
 
 // Call calls the given function with the given request.
