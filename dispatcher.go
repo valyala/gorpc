@@ -22,6 +22,7 @@ import (
 //
 // See examples for details.
 type Dispatcher struct {
+	mu         sync.RWMutex
 	serviceMap map[string]*serviceData
 }
 
@@ -60,6 +61,8 @@ func NewDispatcher() *Dispatcher {
 //
 // See examples for details.
 func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	sd, ok := d.serviceMap[""]
 	if !ok {
 		sd = &serviceData{
@@ -90,6 +93,8 @@ func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
 //
 // All public methods must conform requirements described in AddFunc().
 func (d *Dispatcher) AddService(serviceName string, service interface{}) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	if serviceName == "" {
 		logPanic("gorpc.Dispatcher: serviceName cannot be empty")
 	}
@@ -308,18 +313,14 @@ func init() {
 // The returned HandlerFunc must be assigned to Server.Handler or
 // passed to New*Server().
 func (d *Dispatcher) NewHandlerFunc() HandlerFunc {
-	if len(d.serviceMap) == 0 {
-		logPanic("gorpc.Dispatcher: register at least one service before calling HandlerFunc()")
-	}
-
-	serviceMap := copyServiceMap(d.serviceMap)
-
 	return func(clientAddr string, request interface{}) interface{} {
 		req, ok := request.(*dispatcherRequest)
 		if !ok {
 			logPanic("gorpc.Dispatcher: unsupported request type received from the client: %T", request)
 		}
-		return dispatchRequest(serviceMap, clientAddr, req)
+		d.mu.RLock()
+		defer d.mu.RUnlock()
+		return dispatchRequest(d.serviceMap, clientAddr, req)
 	}
 }
 
@@ -463,6 +464,8 @@ func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
 //
 // It is safe creating multiple service clients over a single underlying client.
 func (d *Dispatcher) NewServiceClient(serviceName string, c *Client) *DispatcherClient {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	if len(d.serviceMap) == 0 || d.serviceMap[serviceName] == nil {
 		logPanic("gorpc.Dispatcher: service [%s] must be registered with AddService() before calling NewServiceClient()", serviceName)
 	}
