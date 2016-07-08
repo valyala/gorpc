@@ -11,13 +11,6 @@ import (
 	"unsafe"
 )
 
-func TestDispatcherNewHandlerNoFuncs(t *testing.T) {
-	d := NewDispatcher()
-	testPanic(t, func() {
-		d.NewHandlerFunc()
-	})
-}
-
 func TestDispatcherNewFuncClientNoFuncs(t *testing.T) {
 	c := NewTCPClient(getRandomAddr())
 
@@ -285,6 +278,26 @@ func TestDispatcherInvalidArgType(t *testing.T) {
 		}
 		if res != nil {
 			t.Fatalf("Expected nil response. Got %+v", res)
+		}
+	})
+}
+
+func TestDispatcherFuncLater(t *testing.T) {
+	d := NewDispatcher()
+	d.AddFunc("foo", func(request string) {})
+	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
+		res, err := dc.Call("foo", nil)
+		if err == nil {
+			t.Fatalf("Expected non-nil error")
+		}
+		if res != nil {
+			t.Fatalf("Expected nil response. Got %+v", res)
+		}
+
+		d.AddFunc("foo0", func() {})
+		_, err = dc.Call("foo0", nil)
+		if err != nil {
+			t.Fatalf("Expected nil error")
 		}
 	})
 }
@@ -985,6 +998,29 @@ func TestDispatcherServiceUnknownMethodCall(t *testing.T) {
 	d := NewDispatcher()
 	d.AddService("qwerty", &testService{})
 	testDispatcherService(t, d, "qwerty", func(dc *DispatcherClient) { testUnknownFuncs(t, dc) })
+}
+
+func TestDispatcherServiceLater(t *testing.T) {
+	d := NewDispatcher()
+	c, s := getClientServer(t, d)
+	defer s.Stop()
+	defer c.Stop()
+
+	dc := NewDispatcherServiceClient("qwerty", c)
+
+	res, err := dc.Call("Get", nil)
+	if err == nil {
+		t.Fatalf("Error expected")
+	}
+	if res != nil {
+		t.Fatalf("Expected nil response. Got %+v", res)
+	}
+
+	d.AddService("qwerty", &testService{})
+	_, err = dc.Call("Get", nil)
+	if err != nil {
+		t.Fatalf("Expected nil error")
+	}
 }
 
 func TestDispatcherServicePrivateMethodCall(t *testing.T) {
