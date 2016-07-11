@@ -247,7 +247,7 @@ func validateType(t reflect.Type) (err error) {
 	})
 
 	switch t.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.UnsafePointer:
+	case reflect.Chan, reflect.Func, reflect.UnsafePointer:
 		err = fmt.Errorf("%s. Found [%s]", t.Kind(), t)
 		return err
 	case reflect.Array, reflect.Slice:
