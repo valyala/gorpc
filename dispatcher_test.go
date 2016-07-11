@@ -3,7 +3,6 @@ package gorpc
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"reflect"
 	"sync/atomic"
 	"testing"
@@ -85,16 +84,6 @@ func TestDispatcherChanArg(t *testing.T) {
 	})
 }
 
-func TestDispatcherInterfaceArg(t *testing.T) {
-	d := NewDispatcher()
-	testPanic(t, func() {
-		d.AddFunc("foo", func(req io.Reader) {})
-	})
-	testPanic(t, func() {
-		d.AddFunc("foo", func(req interface{}) {})
-	})
-}
-
 func TestDispatcherUnsafePointerArg(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
@@ -116,16 +105,6 @@ func TestDispatcherChanRes(t *testing.T) {
 	})
 }
 
-func TestDispatcherInterfaceRes(t *testing.T) {
-	d := NewDispatcher()
-	testPanic(t, func() {
-		d.AddFunc("foo", func() (res io.Reader) { return })
-	})
-	testPanic(t, func() {
-		d.AddFunc("foo", func() (res interface{}) { return })
-	})
-}
-
 func TestDispatcherUnsafePointerRes(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
@@ -136,19 +115,12 @@ func TestDispatcherUnsafePointerRes(t *testing.T) {
 func TestDispatcherStructWithInvalidFields(t *testing.T) {
 	type InvalidMsg struct {
 		B int
-		A io.Reader
+		A chan bool
 	}
 
 	d := NewDispatcher()
 	testPanic(t, func() {
 		d.AddFunc("foo", func(req *InvalidMsg) {})
-	})
-}
-
-func TestDispatcherInvalidMap(t *testing.T) {
-	d := NewDispatcher()
-	testPanic(t, func() {
-		d.AddFunc("foo", func(req map[string]interface{}) {})
 	})
 }
 
