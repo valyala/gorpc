@@ -22,6 +22,7 @@ import (
 //
 // See examples for details.
 type Dispatcher struct {
+	mu         sync.RWMutex
 	serviceMap map[string]*serviceData
 }
 
@@ -60,6 +61,8 @@ func NewDispatcher() *Dispatcher {
 //
 // See examples for details.
 func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	sd, ok := d.serviceMap[""]
 	if !ok {
 		sd = &serviceData{
@@ -90,6 +93,8 @@ func (d *Dispatcher) AddFunc(funcName string, f interface{}) {
 //
 // All public methods must conform requirements described in AddFunc().
 func (d *Dispatcher) AddService(serviceName string, service interface{}) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	if serviceName == "" {
 		logPanic("gorpc.Dispatcher: serviceName cannot be empty")
 	}
@@ -242,7 +247,7 @@ func validateType(t reflect.Type) (err error) {
 	})
 
 	switch t.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.UnsafePointer:
+	case reflect.Chan, reflect.Func, reflect.UnsafePointer:
 		err = fmt.Errorf("%s. Found [%s]", t.Kind(), t)
 		return err
 	case reflect.Array, reflect.Slice:
@@ -308,18 +313,14 @@ func init() {
 // The returned HandlerFunc must be assigned to Server.Handler or
 // passed to New*Server().
 func (d *Dispatcher) NewHandlerFunc() HandlerFunc {
-	if len(d.serviceMap) == 0 {
-		logPanic("gorpc.Dispatcher: register at least one service before calling HandlerFunc()")
-	}
-
-	serviceMap := copyServiceMap(d.serviceMap)
-
 	return func(clientAddr string, request interface{}) interface{} {
 		req, ok := request.(*dispatcherRequest)
 		if !ok {
 			logPanic("gorpc.Dispatcher: unsupported request type received from the client: %T", request)
 		}
-		return dispatchRequest(serviceMap, clientAddr, req)
+		d.mu.RLock()
+		defer d.mu.RUnlock()
+		return dispatchRequest(d.serviceMap, clientAddr, req)
 	}
 }
 
@@ -446,13 +447,9 @@ type DispatcherClient struct {
 	serviceName string
 }
 
-// NewFuncClient returns a client suitable for calling functions registered
-// via AddFunc().
-func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
-	if len(d.serviceMap) == 0 || d.serviceMap[""] == nil {
-		logPanic("gorpc.Dispatcher: register at least one function with AddFunc() before calling NewFuncClient()")
-	}
-
+// NewDispatcherFuncClient returns a client suitable for calling functions
+// registered via AddFunc().
+func NewDispatcherFuncClient(c *Client) *DispatcherClient {
 	return &DispatcherClient{
 		c: c,
 	}
@@ -462,15 +459,35 @@ func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
 // of the service with name serviceName registered via AddService().
 //
 // It is safe creating multiple service clients over a single underlying client.
-func (d *Dispatcher) NewServiceClient(serviceName string, c *Client) *DispatcherClient {
-	if len(d.serviceMap) == 0 || d.serviceMap[serviceName] == nil {
-		logPanic("gorpc.Dispatcher: service [%s] must be registered with AddService() before calling NewServiceClient()", serviceName)
-	}
-
+func NewDispatcherServiceClient(serviceName string, c *Client) *DispatcherClient {
 	return &DispatcherClient{
 		c:           c,
 		serviceName: serviceName,
 	}
+}
+
+// NewFuncClient checks and returns a client suitable for calling functions
+// registered via AddFunc().
+func (d *Dispatcher) NewFuncClient(c *Client) *DispatcherClient {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if len(d.serviceMap) == 0 || d.serviceMap[""] == nil {
+		logPanic("gorpc.Dispatcher: register at least one function with AddFunc() before calling NewFuncClient()")
+	}
+
+	return NewDispatcherFuncClient(c)
+}
+
+// NewServiceClient checks and returns a client suitable for calling methods
+// of the service with name serviceName registered via AddService().
+func (d *Dispatcher) NewServiceClient(serviceName string, c *Client) *DispatcherClient {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	if len(d.serviceMap) == 0 || d.serviceMap[serviceName] == nil {
+		logPanic("gorpc.Dispatcher: service [%s] must be registered with AddService() before calling NewServiceClient()", serviceName)
+	}
+
+	return NewDispatcherServiceClient(serviceName, c)
 }
 
 // Call calls the given function with the given request.

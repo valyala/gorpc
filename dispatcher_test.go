@@ -3,20 +3,12 @@ package gorpc
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
 )
-
-func TestDispatcherNewHandlerNoFuncs(t *testing.T) {
-	d := NewDispatcher()
-	testPanic(t, func() {
-		d.NewHandlerFunc()
-	})
-}
 
 func TestDispatcherNewFuncClientNoFuncs(t *testing.T) {
 	c := NewTCPClient(getRandomAddr())
@@ -92,16 +84,6 @@ func TestDispatcherChanArg(t *testing.T) {
 	})
 }
 
-func TestDispatcherInterfaceArg(t *testing.T) {
-	d := NewDispatcher()
-	testPanic(t, func() {
-		d.AddFunc("foo", func(req io.Reader) {})
-	})
-	testPanic(t, func() {
-		d.AddFunc("foo", func(req interface{}) {})
-	})
-}
-
 func TestDispatcherUnsafePointerArg(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
@@ -123,16 +105,6 @@ func TestDispatcherChanRes(t *testing.T) {
 	})
 }
 
-func TestDispatcherInterfaceRes(t *testing.T) {
-	d := NewDispatcher()
-	testPanic(t, func() {
-		d.AddFunc("foo", func() (res io.Reader) { return })
-	})
-	testPanic(t, func() {
-		d.AddFunc("foo", func() (res interface{}) { return })
-	})
-}
-
 func TestDispatcherUnsafePointerRes(t *testing.T) {
 	d := NewDispatcher()
 	testPanic(t, func() {
@@ -143,19 +115,12 @@ func TestDispatcherUnsafePointerRes(t *testing.T) {
 func TestDispatcherStructWithInvalidFields(t *testing.T) {
 	type InvalidMsg struct {
 		B int
-		A io.Reader
+		A chan bool
 	}
 
 	d := NewDispatcher()
 	testPanic(t, func() {
 		d.AddFunc("foo", func(req *InvalidMsg) {})
-	})
-}
-
-func TestDispatcherInvalidMap(t *testing.T) {
-	d := NewDispatcher()
-	testPanic(t, func() {
-		d.AddFunc("foo", func(req map[string]interface{}) {})
 	})
 }
 
@@ -285,6 +250,26 @@ func TestDispatcherInvalidArgType(t *testing.T) {
 		}
 		if res != nil {
 			t.Fatalf("Expected nil response. Got %+v", res)
+		}
+	})
+}
+
+func TestDispatcherFuncLater(t *testing.T) {
+	d := NewDispatcher()
+	d.AddFunc("foo", func(request string) {})
+	testDispatcherFunc(t, d, func(dc *DispatcherClient) {
+		res, err := dc.Call("foo", nil)
+		if err == nil {
+			t.Fatalf("Expected non-nil error")
+		}
+		if res != nil {
+			t.Fatalf("Expected nil response. Got %+v", res)
+		}
+
+		d.AddFunc("foo0", func() {})
+		_, err = dc.Call("foo0", nil)
+		if err != nil {
+			t.Fatalf("Expected nil error")
 		}
 	})
 }
@@ -985,6 +970,29 @@ func TestDispatcherServiceUnknownMethodCall(t *testing.T) {
 	d := NewDispatcher()
 	d.AddService("qwerty", &testService{})
 	testDispatcherService(t, d, "qwerty", func(dc *DispatcherClient) { testUnknownFuncs(t, dc) })
+}
+
+func TestDispatcherServiceLater(t *testing.T) {
+	d := NewDispatcher()
+	c, s := getClientServer(t, d)
+	defer s.Stop()
+	defer c.Stop()
+
+	dc := NewDispatcherServiceClient("qwerty", c)
+
+	res, err := dc.Call("Get", nil)
+	if err == nil {
+		t.Fatalf("Error expected")
+	}
+	if res != nil {
+		t.Fatalf("Expected nil response. Got %+v", res)
+	}
+
+	d.AddService("qwerty", &testService{})
+	_, err = dc.Call("Get", nil)
+	if err != nil {
+		t.Fatalf("Expected nil error")
+	}
 }
 
 func TestDispatcherServicePrivateMethodCall(t *testing.T) {
