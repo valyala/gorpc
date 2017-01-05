@@ -78,6 +78,8 @@ type Server struct {
 	// See also Listener, which can be used for sophisticated transport
 	// implementation.
 	OnConnect OnConnectFunc
+	// Return true if when hijack the connection
+	OnHandshake func(handshakeByte byte, remoteAddr string, rwc io.ReadWriteCloser) bool
 
 	// The server obtains new client connections via Listener.Accept().
 	//
@@ -235,11 +237,12 @@ func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr strin
 		conn = newConn
 	}
 
+	var handshakeByte byte
 	var enabledCompression bool
 	var err error
 	var stopping atomic.Value
 
-	zChan := make(chan bool, 1)
+	zChan := make(chan byte, 1)
 	go func() {
 		var buf [1]byte
 		if _, err = conn.Read(buf[:]); err != nil {
@@ -247,14 +250,19 @@ func serverHandleConnection(s *Server, conn io.ReadWriteCloser, clientAddr strin
 				s.LogError("gorpc.Server: [%s]->[%s]. Error when reading handshake from client: [%s]", clientAddr, s.Addr, err)
 			}
 		}
-		zChan <- (buf[0] != 0)
+		zChan <- buf[0]
 	}()
 	select {
-	case enabledCompression = <-zChan:
+	case handshakeByte = <-zChan:
 		if err != nil {
 			conn.Close()
 			return
 		}
+		if s.OnHandshake != nil && s.OnHandshake(handshakeByte, clientAddr, conn) {
+			// user hijack the connection
+			return
+		}
+		enabledCompression = handshakeByte == 1
 	case <-s.serverStopChan:
 		stopping.Store(true)
 		conn.Close()
