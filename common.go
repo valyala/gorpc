@@ -16,6 +16,9 @@ const (
 	// DefaultRequestTimeout is the default timeout for client request.
 	DefaultRequestTimeout = 20 * time.Second
 
+	// DefaultRedialDelay is the default delay before trying to redial.
+	DefaultRedialDelay = 1 * time.Second
+
 	// DefaultPendingMessages is the default number of pending messages
 	// handled by Client and Server.
 	DefaultPendingMessages = 32 * 1024
