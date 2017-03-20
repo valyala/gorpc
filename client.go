@@ -57,6 +57,10 @@ type Client struct {
 	// Default value is DefaultRequestTimeout.
 	RequestTimeout time.Duration
 
+	// Time to wait for redial.
+	// Default value is DefaultRedialDelay.
+	RedialDelay time.Duration
+
 	// Disable data compression.
 	// By default data compression is enabled.
 	DisableCompression bool
@@ -134,6 +138,9 @@ func (c *Client) Start() {
 	}
 	if c.RequestTimeout <= 0 {
 		c.RequestTimeout = DefaultRequestTimeout
+	}
+	if c.RedialDelay <= 0 {
+		c.RedialDelay = DefaultRedialDelay
 	}
 	if c.SendBufferSize <= 0 {
 		c.SendBufferSize = DefaultBufferSize
@@ -665,7 +672,7 @@ func clientHandler(c *Client) {
 			select {
 			case <-c.clientStopChan:
 				return
-			case <-time.After(time.Second):
+			case <-time.After(c.RedialDelay):
 			}
 			continue
 		}
