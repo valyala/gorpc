@@ -10,6 +10,11 @@ test-386:
 	GOARCH=386 GOMAXPROCS=4 go test
 	GOARCH=386 GOMAXPROCS=8 go test
 
+test-arm:
+	GOARCH=arm GOARM=6 GOMAXPROCS=1 go test
+	GOARCH=arm GOARM=6 GOMAXPROCS=2 go test
+	GOARCH=arm GOARM=6 GOMAXPROCS=4 go test
+
 bench-1-goprocs:
 	GOMAXPROCS=1 go test -test.bench=".*"
 
