@@ -685,7 +685,9 @@ func clientHandleConnection(c *Client, conn io.ReadWriteCloser) {
 		newConn, err := c.OnConnect(c.Addr, conn)
 		if err != nil {
 			c.LogError("gorpc.Client: [%s]. OnConnect error: [%s]", c.Addr, err)
-			conn.Close()
+			if conn != nil {
+				conn.Close()
+			}
 			return
 		}
 		conn = newConn
