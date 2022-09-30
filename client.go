@@ -195,7 +195,7 @@ func (c *Client) PendingRequestsCount() int {
 // Hint: use Dispatcher for distinct calls' construction.
 //
 // Don't forget starting the client with Client.Start() before calling Client.Call().
-func (c *Client) Call(request interface{}) (response interface{}, err error) {
+func (c *Client) Call(request Request) (response Response, err error) {
 	return c.CallTimeout(request, c.RequestTimeout)
 }
 
@@ -214,10 +214,10 @@ func (c *Client) Call(request interface{}) (response interface{}, err error) {
 // Hint: use Dispatcher for distinct calls' construction.
 //
 // Don't forget starting the client with Client.Start() before calling Client.Call().
-func (c *Client) CallTimeout(request interface{}, timeout time.Duration) (response interface{}, err error) {
+func (c *Client) CallTimeout(request Request, timeout time.Duration) (response Response, err error) {
 	var m *AsyncResult
 	if m, err = c.callAsync(request, false, true); err != nil {
-		return nil, err
+		return Response{}, err
 	}
 
 	t := acquireTimer(timeout)
@@ -246,10 +246,12 @@ func acquireAsyncResult() *AsyncResult {
 var zeroTime time.Time
 
 func releaseAsyncResult(m *AsyncResult) {
-	m.Response = nil
+	m.Response.Size = 0
+	m.Response.Body = nil
 	m.Error = nil
 	m.Done = nil
-	m.request = nil
+	m.request.Size = 0
+	m.request.Body = nil
 	m.t = zeroTime
 	m.done = nil
 	asyncResultPool.Put(m)
@@ -283,7 +285,7 @@ func getClientTimeoutError(c *Client, timeout time.Duration) error {
 // float64, etc. or arrays, slices and maps containing base Go types.
 //
 // Don't forget starting the client with Client.Start() before calling Client.Send().
-func (c *Client) Send(request interface{}) error {
+func (c *Client) Send(request Request) error {
 	_, err := c.callAsync(request, true, true)
 	return err
 }
@@ -291,7 +293,7 @@ func (c *Client) Send(request interface{}) error {
 // AsyncResult is a result returned from Client.CallAsync().
 type AsyncResult struct {
 	// The response can be read only after <-Done unblocks.
-	Response interface{}
+	Response Response
 
 	// The error can be read only after <-Done unblocks.
 	// The error can be casted to ClientError.
@@ -300,7 +302,7 @@ type AsyncResult struct {
 	// Response and Error become available after <-Done unblocks.
 	Done <-chan struct{}
 
-	request  interface{}
+	request  Request
 	t        time.Time
 	done     chan struct{}
 	canceled uint32
@@ -330,13 +332,13 @@ func (m *AsyncResult) isCanceled() bool {
 // CallAsync doesn't respect Client.RequestTimeout - response timeout
 // may be controlled by the caller via something like:
 //
-//     r := c.CallAsync("foobar")
-//     select {
-//     case <-time.After(c.RequestTimeout):
-//        log.Printf("rpc timeout!")
-//     case <-r.Done:
-//        processResponse(r.Response, r.Error)
-//     }
+//	r := c.CallAsync("foobar")
+//	select {
+//	case <-time.After(c.RequestTimeout):
+//	   log.Printf("rpc timeout!")
+//	case <-r.Done:
+//	   processResponse(r.Response, r.Error)
+//	}
 //
 // Request and response types may be arbitrary. All the request and response
 // types the client may use must be registered via RegisterType() before
@@ -346,11 +348,11 @@ func (m *AsyncResult) isCanceled() bool {
 //
 // Don't forget starting the client with Client.Start() before
 // calling Client.CallAsync().
-func (c *Client) CallAsync(request interface{}) (*AsyncResult, error) {
+func (c *Client) CallAsync(request Request) (*AsyncResult, error) {
 	return c.callAsync(request, false, false)
 }
 
-func (c *Client) callAsync(request interface{}, skipResponse bool, usePool bool) (m *AsyncResult, err error) {
+func (c *Client) callAsync(request Request, skipResponse bool, usePool bool) (m *AsyncResult, err error) {
 	if skipResponse {
 		usePool = true
 	}
@@ -428,7 +430,7 @@ type Batch struct {
 // BatchResult is a result returned from Batch.Add*().
 type BatchResult struct {
 	// The response can be read only after Batch.Call*() returns.
-	Response interface{}
+	Response Response
 
 	// The error can be read only after Batch.Call*() returns.
 	// The error can be casted to ClientError.
@@ -438,8 +440,7 @@ type BatchResult struct {
 	// Response and Error become available after <-Done unblocks.
 	Done <-chan struct{}
 
-	request interface{}
-	ctx     interface{}
+	request Request
 	done    chan struct{}
 }
 
@@ -470,7 +471,7 @@ func (c *Client) NewBatch() *Batch {
 //
 // It is safe adding multiple requests to the same batch from concurrently
 // running goroutines.
-func (b *Batch) Add(request interface{}) *BatchResult {
+func (b *Batch) Add(request Request) *BatchResult {
 	return b.add(request, false)
 }
 
@@ -489,11 +490,11 @@ func (b *Batch) Add(request interface{}) *BatchResult {
 //
 // It is safe adding multiple requests to the same batch from concurrently
 // running goroutines.
-func (b *Batch) AddSkipResponse(request interface{}) {
+func (b *Batch) AddSkipResponse(request Request) {
 	b.add(request, true)
 }
 
-func (b *Batch) add(request interface{}, skipResponse bool) *BatchResult {
+func (b *Batch) add(request Request, skipResponse bool) *BatchResult {
 	br := &BatchResult{
 		request: request,
 	}
@@ -583,7 +584,7 @@ func (b *Batch) CallTimeout(timeout time.Duration) error {
 	return nil
 }
 
-func callAsyncRetry(c *Client, request interface{}, skipResponse bool, retriesCount int) (*AsyncResult, error) {
+func callAsyncRetry(c *Client, request Request, skipResponse bool, retriesCount int) (*AsyncResult, error) {
 	retriesCount++
 	for {
 		m, err := c.callAsync(request, skipResponse, false)
@@ -749,7 +750,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*AsyncResul
 	var err error
 	defer func() { done <- err }()
 
-	e := newMessageEncoder(w, c.SendBufferSize, !c.DisableCompression, &c.Stats)
+	e := newMessageEncoder(w, &c.Stats)
 	defer e.Close()
 
 	t := time.NewTimer(c.FlushDelay)
@@ -820,13 +821,14 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*AsyncResul
 			wr.ID = msgID
 		}
 
-		wr.Request = m.request
+		wr.Request = m.request.Body
+		wr.Size = m.request.Size
 		if m.done == nil {
 			c.Stats.incRPCCalls()
 			releaseAsyncResult(m)
 		}
 
-		if err = e.Encode(wr); err != nil {
+		if err = e.EncodeRequest(wr); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
 			return
 		}
@@ -845,12 +847,12 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*AsyncResul
 		done <- err
 	}()
 
-	d := newMessageDecoder(r, c.RecvBufferSize, !c.DisableCompression, &c.Stats)
+	d := newMessageDecoder(r, &c.Stats)
 	defer d.Close()
 
 	var wr wireResponse
 	for {
-		if err = d.Decode(&wr); err != nil {
+		if err = d.DecodeResponse(&wr); err != nil {
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot decode response: [%s]", c.Addr, err)
 			return
 		}
@@ -869,7 +871,10 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*AsyncResul
 
 		atomic.AddUint32(&c.pendingRequestsCount, ^uint32(0))
 
-		m.Response = wr.Response
+		m.Response = Response{
+			Size: wr.Size,
+			Body: wr.Response,
+		}
 
 		wr.ID = 0
 		wr.Response = nil

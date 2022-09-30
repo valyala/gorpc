@@ -1,6 +1,7 @@
 // Separate implementation for 386, since it has broken support for atomics.
 // See https://github.com/valyala/gorpc/issues/5 for details.
 
+//go:build 386
 // +build 386
 
 package gorpc

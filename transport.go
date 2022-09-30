@@ -1,7 +1,6 @@
 package gorpc
 
 import (
-	"crypto/tls"
 	"io"
 	"net"
 	"time"
@@ -212,18 +211,18 @@ func NewUnixServer(addr string, handler HandlerFunc) *Server {
 // The returned client must be started after optional settings' adjustment.
 //
 // The corresponding server must be created with NewTLSServer().
-func NewTLSClient(addr string, cfg *tls.Config) *Client {
-	return &Client{
-		Addr: addr,
-		Dial: func(addr string) (conn io.ReadWriteCloser, err error) {
-			c, err := tls.DialWithDialer(dialer, "tcp", addr, cfg)
-			if err != nil {
-				return nil, err
-			}
-			return c, err
-		},
-	}
-}
+// func NewTLSClient(addr string, cfg *tls.Config) *Client {
+// 	return &Client{
+// 		Addr: addr,
+// 		Dial: func(addr string) (conn io.ReadWriteCloser, err error) {
+// 			c, err := tls.DialWithDialer(dialer, "tcp", addr, cfg)
+// 			if err != nil {
+// 				return nil, err
+// 			}
+// 			return c, err
+// 		},
+// 	}
+// }
 
 // NewTLSServer creates a server listening for TLS (aka SSL) connections
 // on the given addr and processing incoming requests
@@ -233,14 +232,14 @@ func NewTLSClient(addr string, cfg *tls.Config) *Client {
 // The returned server must be started after optional settings' adjustment.
 //
 // The corresponding client must be created with NewTLSClient().
-func NewTLSServer(addr string, handler HandlerFunc, cfg *tls.Config) *Server {
-	return &Server{
-		Addr:    addr,
-		Handler: handler,
-		Listener: &netListener{
-			F: func(addr string) (net.Listener, error) {
-				return tls.Listen("tcp", addr, cfg)
-			},
-		},
-	}
-}
+// func NewTLSServer(addr string, handler HandlerFunc, cfg *tls.Config) *Server {
+// 	return &Server{
+// 		Addr:    addr,
+// 		Handler: handler,
+// 		Listener: &netListener{
+// 			F: func(addr string) (net.Listener, error) {
+// 				return tls.Listen("tcp", addr, cfg)
+// 			},
+// 		},
+// 	}
+// }

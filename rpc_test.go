@@ -1,7 +1,6 @@
 package gorpc
 
 import (
-	"crypto/tls"
 	"fmt"
 	"io"
 	"math/rand"
@@ -634,33 +633,33 @@ func TestUnixTransport(t *testing.T) {
 	testIntClient(t, c)
 }
 
-func TestTLSTransport(t *testing.T) {
-	certFile := "./ssl-cert-snakeoil.pem"
-	keyFile := "./ssl-cert-snakeoil.key"
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		t.Fatalf("Cannot load TLS certificates: [%s]", err)
-	}
-	serverCfg := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-	}
-	clientCfg := &tls.Config{
-		InsecureSkipVerify: true,
-	}
+// func TestTLSTransport(t *testing.T) {
+// 	certFile := "./ssl-cert-snakeoil.pem"
+// 	keyFile := "./ssl-cert-snakeoil.key"
+// 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+// 	if err != nil {
+// 		t.Fatalf("Cannot load TLS certificates: [%s]", err)
+// 	}
+// 	serverCfg := &tls.Config{
+// 		Certificates: []tls.Certificate{cert},
+// 	}
+// 	clientCfg := &tls.Config{
+// 		InsecureSkipVerify: true,
+// 	}
 
-	addr := getRandomAddr()
-	s := NewTLSServer(addr, echoHandler, serverCfg)
-	if err := s.Start(); err != nil {
-		t.Fatalf("Server.Start() failed: [%s]", err)
-	}
-	defer s.Stop()
+// 	addr := getRandomAddr()
+// 	s := NewTLSServer(addr, echoHandler, serverCfg)
+// 	if err := s.Start(); err != nil {
+// 		t.Fatalf("Server.Start() failed: [%s]", err)
+// 	}
+// 	defer s.Stop()
 
-	c := NewTLSClient(addr, clientCfg)
-	c.Start()
-	defer c.Stop()
+// 	c := NewTLSClient(addr, clientCfg)
+// 	c.Start()
+// 	defer c.Stop()
 
-	testIntClient(t, c)
-}
+// 	testIntClient(t, c)
+// }
 
 func TestNoRequestBufferring(t *testing.T) {
 	testNoBufferring(t, -1, DefaultFlushDelay)
