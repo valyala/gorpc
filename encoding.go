@@ -1,6 +1,7 @@
 package gorpc
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 )
@@ -167,7 +168,14 @@ func (d *messageDecoder) DecodeResponse(resp *wireResponse) error {
 	d.stat.addBytesRead(uint64(n))
 	resp.Error = string(respErr)
 
-	resp.Response = io.LimitReader(d.r, int64(resp.Size))
+	// resp.Response = io.LimitReader(d.r, int64(resp.Size))
+	body := make([]byte, resp.Size)
+	_, err = io.ReadFull(d.r, body)
+	if err != nil {
+		d.stat.incReadErrors()
+		return err
+	}
+	resp.Response = bytes.NewBuffer(body)
 	d.stat.addBytesRead(resp.Size)
 	d.stat.incReadCalls()
 	return nil
