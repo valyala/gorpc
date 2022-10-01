@@ -105,6 +105,10 @@ type Client struct {
 	// any time you wish.
 	Stats ConnStats
 
+	// CloseBody is used to close body immediately after reading it.
+	// This is useful for save memory when you don't need the body.
+	CloseBody bool
+
 	pendingRequestsCount uint32
 	requestsChan         chan *AsyncResult
 
@@ -847,7 +851,7 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*AsyncResul
 		done <- err
 	}()
 
-	d := newMessageDecoder(r, &c.Stats)
+	d := newMessageDecoder(r, &c.Stats, c.CloseBody)
 	defer d.Close()
 
 	var wr wireResponse

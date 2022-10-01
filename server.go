@@ -115,6 +115,10 @@ type Server struct {
 	// any time you wish.
 	Stats ConnStats
 
+	// CloseBody is used to close body immediately after reading it.
+	// This is useful for save memory when you don't need the body.
+	CloseBody bool
+
 	serverStopChan chan struct{}
 	stopWg         sync.WaitGroup
 }
@@ -338,7 +342,7 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 		close(done)
 	}()
 
-	d := newMessageDecoder(r, &s.Stats)
+	d := newMessageDecoder(r, &s.Stats, s.CloseBody)
 	defer d.Close()
 
 	var wr wireRequest

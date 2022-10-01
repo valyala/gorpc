@@ -116,8 +116,9 @@ func newMessageEncoder(w io.Writer, s *ConnStats) *messageEncoder {
 }
 
 type messageDecoder struct {
-	r    io.Reader
-	stat *ConnStats
+	closeBody bool
+	r         io.Reader
+	stat      *ConnStats
 }
 
 func (d *messageDecoder) Close() error {
@@ -153,8 +154,12 @@ func (d *messageDecoder) DecodeRequest(req *wireRequest) error {
 			}
 			index += n
 		}
-		req.Request = buf
 		d.stat.addBytesRead(uint64(index))
+		if d.closeBody {
+			buf.Close()
+		} else {
+			req.Request = buf
+		}
 	}
 	d.stat.incReadCalls()
 	return nil
@@ -197,16 +202,21 @@ func (d *messageDecoder) DecodeResponse(resp *wireResponse) error {
 			}
 			index += n
 		}
-		resp.Response = buf
 		d.stat.addBytesRead(uint64(index))
+		if d.closeBody {
+			buf.Close()
+		} else {
+			resp.Response = buf
+		}
 	}
 	d.stat.incReadCalls()
 	return nil
 }
 
-func newMessageDecoder(r io.Reader, s *ConnStats) *messageDecoder {
+func newMessageDecoder(r io.Reader, s *ConnStats, closeBody bool) *messageDecoder {
 	return &messageDecoder{
-		r:    r,
-		stat: s,
+		r:         r,
+		stat:      s,
+		closeBody: closeBody,
 	}
 }
