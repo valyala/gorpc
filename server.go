@@ -11,12 +11,12 @@ import (
 
 type Request struct {
 	Size uint64
-	Body io.Reader
+	Body io.ReadCloser
 }
 
 type Response struct {
 	Size uint64
-	Body io.Reader
+	Body io.ReadCloser
 }
 
 // HandlerFunc is a server handler function.

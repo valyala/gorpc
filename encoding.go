@@ -22,13 +22,13 @@ import (
 type wireRequest struct {
 	ID      uint64
 	Size    uint64
-	Request io.Reader
+	Request io.ReadCloser
 }
 
 type wireResponse struct {
 	ID       uint64
 	Size     uint64
-	Response io.Reader
+	Response io.ReadCloser
 	Error    string
 }
 
@@ -59,10 +59,7 @@ func (e *messageEncoder) Flush() error {
 	return nil
 }
 
-func (e *messageEncoder) encode(header []byte, body io.Reader) error {
-	if b, ok := body.(io.ReadCloser); ok {
-		defer b.Close()
-	}
+func (e *messageEncoder) encode(header []byte, body io.ReadCloser) error {
 	n, err := e.w.Write(header)
 	if err != nil {
 		e.stat.incWriteErrors()
@@ -71,6 +68,7 @@ func (e *messageEncoder) encode(header []byte, body io.Reader) error {
 	e.stat.addBytesWritten(uint64(n))
 
 	if body != nil {
+		defer body.Close()
 		nc, err := io.Copy(e.w, body)
 		if err != nil {
 			e.stat.incWriteErrors()
@@ -140,8 +138,24 @@ func (d *messageDecoder) DecodeRequest(req *wireRequest) error {
 
 	req.ID = binary.BigEndian.Uint64(header[:8])
 	req.Size = binary.BigEndian.Uint64(header[8:])
-	req.Request = io.LimitReader(d.r, int64(req.Size))
-	d.stat.addBytesRead(req.Size)
+	if req.Size > 0 {
+		buf := bufferPool.Get().(*Buffer)
+		buf.Reserve(int(req.Size))
+		body := io.LimitReader(d.r, int64(req.Size))
+		index := 0
+		for {
+			n, err = body.Read(buf.Bytes()[index:])
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return err
+			}
+			index += n
+		}
+		req.Request = buf
+		d.stat.addBytesRead(uint64(index))
+	}
 	d.stat.incReadCalls()
 	return nil
 }
@@ -168,17 +182,23 @@ func (d *messageDecoder) DecodeResponse(resp *wireResponse) error {
 	resp.Error = string(respErr)
 
 	// resp.Response = io.LimitReader(d.r, int64(resp.Size))
-	buf := make([]byte, 4096)
-	body := io.LimitReader(d.r, int64(resp.Size))
-	for {
-		n, err = body.Read(buf)
-		if err == io.EOF {
-			break
+	if resp.Size > 0 {
+		buf := bufferPool.Get().(*Buffer)
+		buf.Reserve(int(resp.Size))
+		body := io.LimitReader(d.r, int64(resp.Size))
+		index := 0
+		for {
+			n, err = body.Read(buf.Bytes()[index:])
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return err
+			}
+			index += n
 		}
-		if err != nil {
-			return err
-		}
-		d.stat.addBytesRead(uint64(n))
+		resp.Response = buf
+		d.stat.addBytesRead(uint64(index))
 	}
 	d.stat.incReadCalls()
 	return nil
