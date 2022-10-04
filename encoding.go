@@ -142,19 +142,11 @@ func (d *messageDecoder) DecodeRequest(req *wireRequest) error {
 	if req.Size > 0 {
 		buf := bufferPool.Get().(*Buffer)
 		buf.Reserve(int(req.Size))
-		body := io.LimitReader(d.r, int64(req.Size))
-		index := 0
-		for {
-			n, err = body.Read(buf.Bytes()[index:])
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return err
-			}
-			index += n
+		bytes, err := buf.ReadFrom(io.LimitReader(d.r, int64(req.Size)))
+		if err != nil {
+			return err
 		}
-		d.stat.addBytesRead(uint64(index))
+		d.stat.addBytesRead(uint64(bytes))
 		if d.closeBody {
 			buf.Close()
 		} else {
@@ -186,23 +178,14 @@ func (d *messageDecoder) DecodeResponse(resp *wireResponse) error {
 	d.stat.addBytesRead(uint64(n))
 	resp.Error = string(respErr)
 
-	// resp.Response = io.LimitReader(d.r, int64(resp.Size))
 	if resp.Size > 0 {
 		buf := bufferPool.Get().(*Buffer)
 		buf.Reserve(int(resp.Size))
-		body := io.LimitReader(d.r, int64(resp.Size))
-		index := 0
-		for {
-			n, err = body.Read(buf.Bytes()[index:])
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return err
-			}
-			index += n
+		bytes, err := buf.ReadFrom(io.LimitReader(d.r, int64(resp.Size)))
+		if err != nil {
+			return err
 		}
-		d.stat.addBytesRead(uint64(index))
+		d.stat.addBytesRead(uint64(bytes))
 		if d.closeBody {
 			buf.Close()
 		} else {

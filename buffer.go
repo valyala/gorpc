@@ -57,6 +57,23 @@ func (b *Buffer) Read(p []byte) (n int, err error) {
 	return
 }
 
+func (b *Buffer) ReadFrom(r io.Reader) (bytes int64, err error) {
+	n := 0
+	for {
+		if bytes == int64(len(b.slice)) {
+			return
+		}
+		n, err = r.Read(b.slice[bytes:])
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			return bytes, err
+		}
+		bytes += int64(n)
+	}
+}
+
 func (b *Buffer) Close() error {
 	b.pool.Put(b)
 	return nil
