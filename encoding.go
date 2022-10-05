@@ -1,7 +1,9 @@
 package gorpc
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"io"
 )
 
@@ -15,26 +17,46 @@ import (
 //
 // There is no need in registering argument and return value types
 // for functions and methods registered via Dispatcher.
-// func RegisterType(x interface{}) {
-// 	gob.Register(x)
-// }
+func RegisterType(x interface{}) {
+	gob.Register(x)
+}
+
+var (
+	requestStartLineSize  = binary.Size(requestStartLine{})
+	responseStartLineSize = binary.Size(responseStartLine{})
+)
+
+type requestStartLine struct {
+	HeaderSize   uint32
+	ID, BodySize uint64
+}
+
+type responseStartLine struct {
+	ErrorSize    uint16
+	HeaderSize   uint32
+	ID, BodySize uint64
+}
 
 type wireRequest struct {
 	ID      uint64
 	Size    uint64
-	Request io.ReadCloser
+	Headers map[string]interface{}
+	Body    io.ReadCloser
 }
 
 type wireResponse struct {
-	ID       uint64
-	Size     uint64
-	Response io.ReadCloser
-	Error    string
+	ID      uint64
+	Size    uint64
+	Headers map[string]interface{}
+	Body    io.ReadCloser
+	Error   string
 }
 
 type messageEncoder struct {
-	w    io.Writer
-	stat *ConnStats
+	w             io.Writer
+	headerBuffer  *bytes.Buffer
+	headerEncoder *gob.Encoder
+	stat          *ConnStats
 }
 
 func (e *messageEncoder) Close() error {
@@ -59,13 +81,15 @@ func (e *messageEncoder) Flush() error {
 	return nil
 }
 
-func (e *messageEncoder) encode(header []byte, body io.ReadCloser) error {
-	n, err := e.w.Write(header)
-	if err != nil {
-		e.stat.incWriteErrors()
-		return err
+func (e *messageEncoder) encode(body io.ReadCloser) error {
+	if e.headerBuffer.Len() > 0 {
+		n, err := e.w.Write(e.headerBuffer.Bytes())
+		if err != nil {
+			e.stat.incWriteErrors()
+			return err
+		}
+		e.stat.addBytesWritten(uint64(n))
 	}
-	e.stat.addBytesWritten(uint64(n))
 
 	if body != nil {
 		defer body.Close()
@@ -82,20 +106,57 @@ func (e *messageEncoder) encode(header []byte, body io.ReadCloser) error {
 }
 
 func (e *messageEncoder) EncodeRequest(req wireRequest) error {
-	header := make([]byte, 0, 16)
-	header = binary.BigEndian.AppendUint64(header, req.ID)
-	header = binary.BigEndian.AppendUint64(header, req.Size)
-	return e.encode(header, req.Request)
+	if len(req.Headers) != 0 {
+		e.headerBuffer.Reset()
+		if err := e.headerEncoder.Encode(req.Headers); err != nil {
+			e.stat.incWriteErrors()
+			return err
+		}
+	}
+
+	if err := binary.Write(e.w, binary.BigEndian, requestStartLine{
+		ID:         req.ID,
+		HeaderSize: uint32(e.headerBuffer.Len()),
+		BodySize:   req.Size,
+	}); err != nil {
+		e.stat.incWriteErrors()
+		return err
+	}
+
+	return e.encode(req.Body)
 }
 
 func (e *messageEncoder) EncodeResponse(resp wireResponse) error {
+	if len(resp.Headers) != 0 {
+		e.headerBuffer.Reset()
+		if err := e.headerEncoder.Encode(resp.Headers); err != nil {
+			e.stat.incWriteErrors()
+			return err
+		}
+	}
+
 	respErr := []byte(resp.Error)
-	header := make([]byte, 0, 20+len(respErr))
-	header = binary.BigEndian.AppendUint64(header, resp.ID)
-	header = binary.BigEndian.AppendUint64(header, resp.Size)
-	header = binary.BigEndian.AppendUint32(header, uint32(len(respErr)))
-	header = append(header, respErr...)
-	return e.encode(header, resp.Response)
+
+	if err := binary.Write(e.w, binary.BigEndian, responseStartLine{
+		ID:         resp.ID,
+		ErrorSize:  uint16(len(respErr)),
+		HeaderSize: uint32(e.headerBuffer.Len()),
+		BodySize:   resp.Size,
+	}); err != nil {
+		e.stat.incWriteErrors()
+		return err
+	}
+
+	if len(respErr) > 0 {
+		n, err := e.w.Write(respErr)
+		if err != nil {
+			e.stat.incWriteErrors()
+			return err
+		}
+		e.stat.addBytesWritten(uint64(n))
+	}
+
+	return e.encode(resp.Body)
 }
 
 func newMessageEncoder(w io.Writer, s *ConnStats) *messageEncoder {
@@ -109,16 +170,22 @@ func newMessageEncoder(w io.Writer, s *ConnStats) *messageEncoder {
 	// 	ww = bufio.NewWriterSize(zw, bufferSize)
 	// }
 
+	headerBuffer := bytes.NewBuffer(make([]byte, 0))
+
 	return &messageEncoder{
-		w:    w,
-		stat: s,
+		w:             w,
+		headerBuffer:  headerBuffer,
+		headerEncoder: gob.NewEncoder(headerBuffer),
+		stat:          s,
 	}
 }
 
 type messageDecoder struct {
-	closeBody bool
-	r         io.Reader
-	stat      *ConnStats
+	closeBody     bool
+	r             io.Reader
+	headerBuffer  *bytes.Buffer
+	headerDecoder *gob.Decoder
+	stat          *ConnStats
 }
 
 func (d *messageDecoder) Close() error {
@@ -129,16 +196,29 @@ func (d *messageDecoder) Close() error {
 }
 
 func (d *messageDecoder) DecodeRequest(req *wireRequest) error {
-	header := make([]byte, 16)
-	n, err := io.ReadFull(d.r, header)
-	if err != nil {
+	var startLine requestStartLine
+	if err := binary.Read(d.r, binary.BigEndian, &startLine); err != nil {
 		d.stat.incReadErrors()
 		return err
 	}
-	d.stat.addBytesRead(uint64(n))
+	d.stat.addBytesRead(uint64(requestStartLineSize))
 
-	req.ID = binary.BigEndian.Uint64(header[:8])
-	req.Size = binary.BigEndian.Uint64(header[8:])
+	req.ID = startLine.ID
+	req.Size = startLine.BodySize
+
+	if startLine.HeaderSize > 0 {
+		d.headerBuffer.Reset()
+		if _, err := io.CopyN(d.headerBuffer, d.r, int64(startLine.HeaderSize)); err != nil {
+			d.stat.incReadErrors()
+			return err
+		}
+		d.stat.addBytesRead(uint64(startLine.HeaderSize))
+		if err := d.headerDecoder.Decode(&req.Headers); err != nil {
+			d.stat.incReadErrors()
+			return err
+		}
+	}
+
 	if req.Size > 0 {
 		buf := bufferPool.Get().(*Buffer)
 		buf.Reserve(int(req.Size))
@@ -150,7 +230,7 @@ func (d *messageDecoder) DecodeRequest(req *wireRequest) error {
 		if d.closeBody {
 			buf.Close()
 		} else {
-			req.Request = buf
+			req.Body = buf
 		}
 	}
 	d.stat.incReadCalls()
@@ -158,25 +238,38 @@ func (d *messageDecoder) DecodeRequest(req *wireRequest) error {
 }
 
 func (d *messageDecoder) DecodeResponse(resp *wireResponse) error {
-	header := make([]byte, 20)
-	n, err := io.ReadFull(d.r, header)
-	if err != nil {
+	var startLine responseStartLine
+	if err := binary.Read(d.r, binary.BigEndian, &startLine); err != nil {
 		d.stat.incReadErrors()
 		return err
 	}
-	d.stat.addBytesRead(uint64(n))
+	d.stat.addBytesRead(uint64(responseStartLineSize))
 
-	resp.ID = binary.BigEndian.Uint64(header[:8])
-	resp.Size = binary.BigEndian.Uint64(header[8:16])
-	errSize := binary.BigEndian.Uint32(header[16:20])
-	respErr := make([]byte, errSize)
-	n, err = io.ReadFull(d.r, respErr)
-	if err != nil {
-		d.stat.incReadErrors()
-		return err
+	resp.ID = startLine.ID
+	resp.Size = startLine.BodySize
+
+	if startLine.ErrorSize > 0 {
+		respErr := make([]byte, startLine.ErrorSize)
+		if _, err := io.ReadFull(d.r, respErr); err != nil {
+			d.stat.incReadErrors()
+			return err
+		}
+		d.stat.addBytesRead(uint64(startLine.ErrorSize))
+		resp.Error = string(respErr)
 	}
-	d.stat.addBytesRead(uint64(n))
-	resp.Error = string(respErr)
+
+	if startLine.HeaderSize > 0 {
+		d.headerBuffer.Reset()
+		if _, err := io.CopyN(d.headerBuffer, d.r, int64(startLine.HeaderSize)); err != nil {
+			d.stat.incReadErrors()
+			return err
+		}
+		d.stat.addBytesRead(uint64(startLine.HeaderSize))
+		if err := d.headerDecoder.Decode(&resp.Headers); err != nil {
+			d.stat.incReadErrors()
+			return err
+		}
+	}
 
 	if resp.Size > 0 {
 		buf := bufferPool.Get().(*Buffer)
@@ -189,7 +282,7 @@ func (d *messageDecoder) DecodeResponse(resp *wireResponse) error {
 		if d.closeBody {
 			buf.Close()
 		} else {
-			resp.Response = buf
+			resp.Body = buf
 		}
 	}
 	d.stat.incReadCalls()
@@ -197,9 +290,12 @@ func (d *messageDecoder) DecodeResponse(resp *wireResponse) error {
 }
 
 func newMessageDecoder(r io.Reader, s *ConnStats, closeBody bool) *messageDecoder {
+	headerBuffer := bytes.NewBuffer(make([]byte, 0))
 	return &messageDecoder{
-		r:         r,
-		stat:      s,
-		closeBody: closeBody,
+		r:             r,
+		headerBuffer:  headerBuffer,
+		headerDecoder: gob.NewDecoder(headerBuffer),
+		stat:          s,
+		closeBody:     closeBody,
 	}
 }

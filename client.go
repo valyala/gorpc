@@ -825,7 +825,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*AsyncResul
 			wr.ID = msgID
 		}
 
-		wr.Request = m.request.Body
+		wr.Body = m.request.Body
 		wr.Size = m.request.Size
 		if m.done == nil {
 			c.Stats.incRPCCalls()
@@ -836,7 +836,7 @@ func clientWriter(c *Client, w io.Writer, pendingRequests map[uint64]*AsyncResul
 			err = fmt.Errorf("gorpc.Client: [%s]. Cannot send request to wire: [%s]", c.Addr, err)
 			return
 		}
-		wr.Request = nil
+		wr.Body = nil
 	}
 }
 
@@ -877,11 +877,11 @@ func clientReader(c *Client, r io.Reader, pendingRequests map[uint64]*AsyncResul
 
 		m.Response = Response{
 			Size: wr.Size,
-			Body: wr.Response,
+			Body: wr.Body,
 		}
 
 		wr.ID = 0
-		wr.Response = nil
+		wr.Body = nil
 		if wr.Error != "" {
 			m.Error = &ClientError{
 				Server: true,

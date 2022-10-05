@@ -358,13 +358,13 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 		m.ID = wr.ID
 		m.Request = &Request{
 			Size: wr.Size,
-			Body: wr.Request,
+			Body: wr.Body,
 		}
 		m.ClientAddr = clientAddr
 
 		wr.ID = 0
 		wr.Size = 0
-		wr.Request = nil
+		wr.Body = nil
 
 		select {
 		case workersCh <- struct{}{}:
@@ -468,7 +468,7 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 		}
 
 		wr.ID = m.ID
-		wr.Response = m.Response.Body
+		wr.Body = m.Response.Body
 		wr.Size = m.Response.Size
 		wr.Error = m.Error
 
@@ -480,7 +480,7 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 			s.LogError("gorpc.Server: [%s]->[%s]. Cannot send response to wire: [%s]", clientAddr, s.Addr, err)
 			return
 		}
-		wr.Response = nil
+		wr.Body = nil
 		wr.Error = ""
 
 		s.Stats.incRPCCalls()
