@@ -1,80 +1,24 @@
 package gorpc
 
 import (
-	"io"
+	"bytes"
 	"sync"
 )
 
-var bufferPool sync.Pool
-
-func init() {
-	bufferPool = sync.Pool{
-		New: func() any {
-			return &Buffer{
-				slice: make([]byte, 0),
-				pool:  &bufferPool,
-			}
-		},
-	}
+var bufferPool = sync.Pool{
+	New: func() any {
+		return &Buffer{
+			bytes.NewBuffer(make([]byte, 0)),
+		}
+	},
 }
 
 type Buffer struct {
-	cursor int
-	slice  []byte
-	pool   *sync.Pool
-}
-
-func (b *Buffer) Size() int {
-	return len(b.slice)
-}
-
-func (b *Buffer) Bytes() []byte {
-	return b.slice
-}
-
-func (b *Buffer) Clear() {
-	b.slice = b.slice[:0]
-}
-
-func (b *Buffer) Reserve(size int) {
-	if cap(b.slice) < size {
-		b.slice = make([]byte, size)
-	}
-	if len(b.slice) < size {
-		for i := len(b.slice); i < size; i++ {
-			b.slice = append(b.slice, 0)
-		}
-	}
-	b.slice = b.slice[:size]
-}
-
-func (b *Buffer) Read(p []byte) (n int, err error) {
-	n = copy(p, b.slice[b.cursor:])
-	if n == 0 {
-		return n, io.EOF
-	}
-	b.cursor += n
-	return
-}
-
-func (b *Buffer) ReadFrom(r io.Reader) (bytes int64, err error) {
-	n := 0
-	for {
-		if bytes == int64(len(b.slice)) {
-			return
-		}
-		n, err = r.Read(b.slice[bytes:])
-		if err != nil {
-			if err == io.EOF {
-				err = nil
-			}
-			return bytes, err
-		}
-		bytes += int64(n)
-	}
+	*bytes.Buffer
 }
 
 func (b *Buffer) Close() error {
-	b.pool.Put(b)
+	b.Reset()
+	bufferPool.Put(b)
 	return nil
 }

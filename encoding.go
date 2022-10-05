@@ -1,7 +1,6 @@
 package gorpc
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/gob"
 	"io"
@@ -54,7 +53,7 @@ type wireResponse struct {
 
 type messageEncoder struct {
 	w             io.Writer
-	headerBuffer  *bytes.Buffer
+	headerBuffer  *Buffer
 	headerEncoder *gob.Encoder
 	stat          *ConnStats
 }
@@ -63,7 +62,7 @@ func (e *messageEncoder) Close() error {
 	// if e.zw != nil {
 	// 	return e.zw.Close()
 	// }
-	return nil
+	return e.headerBuffer.Close()
 }
 
 func (e *messageEncoder) Flush() error {
@@ -170,7 +169,7 @@ func newMessageEncoder(w io.Writer, s *ConnStats) *messageEncoder {
 	// 	ww = bufio.NewWriterSize(zw, bufferSize)
 	// }
 
-	headerBuffer := bytes.NewBuffer(make([]byte, 0))
+	headerBuffer := bufferPool.Get().(*Buffer)
 
 	return &messageEncoder{
 		w:             w,
@@ -183,7 +182,7 @@ func newMessageEncoder(w io.Writer, s *ConnStats) *messageEncoder {
 type messageDecoder struct {
 	closeBody     bool
 	r             io.Reader
-	headerBuffer  *bytes.Buffer
+	headerBuffer  *Buffer
 	headerDecoder *gob.Decoder
 	stat          *ConnStats
 }
@@ -192,7 +191,7 @@ func (d *messageDecoder) Close() error {
 	// if d.zr != nil {
 	// 	return d.zr.Close()
 	// }
-	return nil
+	return d.headerBuffer.Close()
 }
 
 func (d *messageDecoder) DecodeRequest(req *wireRequest) error {
@@ -221,7 +220,6 @@ func (d *messageDecoder) DecodeRequest(req *wireRequest) error {
 
 	if req.Size > 0 {
 		buf := bufferPool.Get().(*Buffer)
-		buf.Reserve(int(req.Size))
 		bytes, err := buf.ReadFrom(io.LimitReader(d.r, int64(req.Size)))
 		if err != nil {
 			return err
@@ -273,7 +271,6 @@ func (d *messageDecoder) DecodeResponse(resp *wireResponse) error {
 
 	if resp.Size > 0 {
 		buf := bufferPool.Get().(*Buffer)
-		buf.Reserve(int(resp.Size))
 		bytes, err := buf.ReadFrom(io.LimitReader(d.r, int64(resp.Size)))
 		if err != nil {
 			return err
@@ -290,7 +287,7 @@ func (d *messageDecoder) DecodeResponse(resp *wireResponse) error {
 }
 
 func newMessageDecoder(r io.Reader, s *ConnStats, closeBody bool) *messageDecoder {
-	headerBuffer := bytes.NewBuffer(make([]byte, 0))
+	headerBuffer := bufferPool.Get().(*Buffer)
 	return &messageDecoder{
 		r:             r,
 		headerBuffer:  headerBuffer,
