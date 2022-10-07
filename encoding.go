@@ -39,14 +39,14 @@ type responseStartLine struct {
 type wireRequest struct {
 	ID      uint64
 	Size    uint64
-	Headers map[string]interface{}
+	Headers map[string]any
 	Body    io.ReadCloser
 }
 
 type wireResponse struct {
 	ID      uint64
 	Size    uint64
-	Headers map[string]interface{}
+	Headers map[string]any
 	Body    io.ReadCloser
 	Error   string
 }

@@ -10,13 +10,15 @@ import (
 )
 
 type Request struct {
-	Size uint64
-	Body io.ReadCloser
+	Size    uint64
+	Headers map[string]any
+	Body    io.ReadCloser
 }
 
 type Response struct {
-	Size uint64
-	Body io.ReadCloser
+	Size    uint64
+	Headers map[string]any
+	Body    io.ReadCloser
 }
 
 // HandlerFunc is a server handler function.
@@ -29,7 +31,7 @@ type Response struct {
 // float64, etc. or arrays, slices and maps containing base Go types.
 //
 // Hint: use Dispatcher for HandlerFunc construction.
-type HandlerFunc func(clientAddr string, request Request) (response Response)
+type HandlerFunc func(clientAddr string, request Request) (response *Response, err error)
 
 // Server implements RPC server.
 //
@@ -357,13 +359,15 @@ func serverReader(s *Server, r io.Reader, clientAddr string, responsesChan chan<
 		m := serverMessagePool.Get().(*serverMessage)
 		m.ID = wr.ID
 		m.Request = &Request{
-			Size: wr.Size,
-			Body: wr.Body,
+			Size:    wr.Size,
+			Headers: wr.Headers,
+			Body:    wr.Body,
 		}
 		m.ClientAddr = clientAddr
 
 		wr.ID = 0
 		wr.Size = 0
+		wr.Headers = nil
 		wr.Body = nil
 
 		select {
@@ -398,7 +402,7 @@ func serveRequest(s *Server, responsesChan chan<- *serverMessage, stopChan <-cha
 	s.Stats.incRPCTime(uint64(time.Since(t).Seconds() * 1000))
 
 	if !skipResponse {
-		m.Response = &response
+		m.Response = response
 		m.Error = err
 
 		// Select hack for better performance.
@@ -416,7 +420,7 @@ func serveRequest(s *Server, responsesChan chan<- *serverMessage, stopChan <-cha
 	<-workersCh
 }
 
-func callHandlerWithRecover(logErrorFunc LoggerFunc, handler HandlerFunc, clientAddr, serverAddr string, request Request) (response Response, errStr string) {
+func callHandlerWithRecover(logErrorFunc LoggerFunc, handler HandlerFunc, clientAddr, serverAddr string, request Request) (response *Response, errStr string) {
 	defer func() {
 		if x := recover(); x != nil {
 			stackTrace := make([]byte, 1<<20)
@@ -425,8 +429,11 @@ func callHandlerWithRecover(logErrorFunc LoggerFunc, handler HandlerFunc, client
 			logErrorFunc("gorpc.Server: [%s]->[%s]. %s", clientAddr, serverAddr, errStr)
 		}
 	}()
-	response = handler(clientAddr, request)
-	return
+	response, err := handler(clientAddr, request)
+	if err != nil {
+		return nil, err.Error()
+	}
+	return response, ""
 }
 
 func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-chan *serverMessage, stopChan <-chan struct{}, done chan<- struct{}, enabledCompression bool) {
@@ -468,9 +475,12 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 		}
 
 		wr.ID = m.ID
-		wr.Body = m.Response.Body
-		wr.Size = m.Response.Size
 		wr.Error = m.Error
+		if m.Response != nil {
+			wr.Body = m.Response.Body
+			wr.Size = m.Response.Size
+			wr.Headers = m.Response.Headers
+		}
 
 		m.Response = nil
 		m.Error = ""
@@ -481,7 +491,8 @@ func serverWriter(s *Server, w io.Writer, clientAddr string, responsesChan <-cha
 			return
 		}
 		wr.Body = nil
-		wr.Error = ""
+		wr.Size = 0
+		wr.Headers = nil
 
 		s.Stats.incRPCCalls()
 	}
