@@ -1,4 +1,4 @@
-package gorpc
+package iorpc
 
 import (
 	"encoding/binary"

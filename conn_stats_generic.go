@@ -1,7 +1,7 @@
 //go:build !386
 // +build !386
 
-package gorpc
+package iorpc
 
 import (
 	"sync/atomic"
